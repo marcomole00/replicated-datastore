@@ -40,7 +40,7 @@ public class Node {
         //start the server socket
         File file;
         try {
-            file = new File("/home/marco/.config/quorum/topology.txt");
+            file = new File("config.txt");
         } catch (Exception e) {
             System.out.println("Error in opening the topology file");
             return ;
