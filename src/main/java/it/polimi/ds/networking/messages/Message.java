@@ -1,6 +1,6 @@
 package it.polimi.ds.networking.messages;
 
-public class Message {
+public abstract class Message {
     private final String key;
 
     Message(String key) {
