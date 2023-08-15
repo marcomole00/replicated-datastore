@@ -10,8 +10,6 @@ import it.polimi.ds.utils.SafeLogger;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.logging.Level;
 
 public class Client {
@@ -21,8 +19,6 @@ public class Client {
     SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
 
     Topology topology = new Topology();
-
-    List<Connection> connections = new LinkedList<>();
 
     public void run() throws IOException {
         while (running) {
@@ -51,9 +47,7 @@ public class Client {
     }
 
     Connection openConnection(int node) throws IOException {
-        Connection connection = new AddressConnection(topology.getIp(node), topology.getPort(node), logger);
-        connections.add(connection);
-        return connection;
+        return new AddressConnection(topology.getIp(node), topology.getPort(node), logger);
     }
 
     void get(String key, int node) throws IOException {
@@ -66,7 +60,6 @@ public class Client {
         GetResponse res = (GetResponse) msg;
         logger.log(Level.INFO, "Suvvessfully got value " + res.getValue() + " with version " + res.getVersion());
         c.stop();
-        connections.remove(c);
     }
 
     void put(String key, String value, int node) throws IOException {
@@ -79,6 +72,5 @@ public class Client {
         PutResponse res = (PutResponse) msg;
         logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
         c.stop();
-        connections.remove(c);
     }
 }
