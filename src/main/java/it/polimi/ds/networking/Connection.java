@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -26,7 +27,7 @@ public abstract class Connection {
 
     private final Queue<Message> inbox = new LinkedList<>();
 
-    private final Map<MessageFilter, Consumer<Message>> bindings = new HashMap<MessageFilter, Consumer<Message>>();
+    private final Map<MessageFilter, BiConsumer<Connection, Message>> bindings = new HashMap<MessageFilter, BiConsumer<Connection, Message>>();
 
     protected Connection(Socket socket, SafeLogger logger) throws IOException {
         this.socket = socket;
@@ -99,7 +100,7 @@ public abstract class Connection {
         return message.getKey().equals(filter.getKey());
     }
 
-    public void bindToMessage(MessageFilter filter, Consumer<Message> action) {
+    public void bindToMessage(MessageFilter filter, BiConsumer<Connection, Message> action) {
         synchronized (bindings) {
             bindings.put(filter, action);
         }
@@ -126,9 +127,9 @@ public abstract class Connection {
 
     Boolean matchBinding(Message m) {
         synchronized (bindings) {
-            for (Map.Entry<MessageFilter, Consumer<Message>> b : bindings.entrySet()) {
+            for (Map.Entry<MessageFilter, BiConsumer<Connection, Message>> b : bindings.entrySet()) {
                 if(matchFilter(m, b.getKey())) {
-                    b.getValue().accept(m);
+                    b.getValue().accept(this, m);
                     return true;
                 }
             }
@@ -147,7 +148,7 @@ public abstract class Connection {
     /**
      * stops the listen message loop by closing the socket that will raise an exception on readObject()
      */
-    void stop() {
+    public void stop() {
         try {
             socket.close();
         } catch (IOException ignored) {}
