@@ -8,7 +8,6 @@ public class Topology {
 
     public Topology() {
         nodes = new ArrayList<>();
-
     }
 
     public List<Address> getNodes() {
@@ -37,7 +36,7 @@ public class Topology {
 
     public int getId(String ip) {
         for (int i = 0; i < nodes.size(); i++) {
-            if (nodes.get(i).getIp().equals(ip)) {
+            if (getIp(i).equals(ip)) {
                 return i;
             }
         }

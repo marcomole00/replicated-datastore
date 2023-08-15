@@ -1,20 +1,21 @@
 package it.polimi.ds.node;
 
-import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.lang3.tuple.MutableTriple;
 
-public class Entry  extends MutablePair<String, Integer> {
+public class Entry extends MutableTriple<String, Integer, State> {
 
-    public Entry(String value, Integer version) {
-        super(value, version);
+    public Entry(String value, Integer version, State state) {
+        super(value, version, state);
     }
-    @Override
-    public String getLeft() {
+    public String getValue() {
         return super.getLeft();
     }
 
-    @Override
-    public Integer getRight() {
-        return super.getRight();
+    public Integer getVersion() {
+        return super.getMiddle();
     }
 
+    public State getState() {
+        return super.getRight();
+    }
 }

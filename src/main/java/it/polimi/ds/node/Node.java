@@ -117,7 +117,7 @@ public class Node {
                 for (int i= 0; i < ips.length; i++) {
                     System.out.println("IP address: " + ips[i].getHostAddress());
                     for (int j = 0; j < topology.getNodes().size(); j++) {
-                        if (ips[i].getHostAddress().equals(topology.getNodes().get(j).getIp())) {
+                        if (ips[i].getHostAddress().equals(topology.getIp(j))) {
                             my_id = j;
                             System.out.println("My id is " + my_id);
 
