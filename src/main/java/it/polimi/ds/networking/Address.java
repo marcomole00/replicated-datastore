@@ -14,4 +14,8 @@ public class Address extends MutablePair<String, Integer> {
     public Integer getPort() {
         return super.getRight();
     }
+
+    public String toString() {
+        return getIp() + ":" + getPort();
+    }
 }

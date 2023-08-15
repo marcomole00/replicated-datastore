@@ -35,11 +35,11 @@ public class Client {
         }
         else if (cmd.matches("get [^\\s]+ from [0-9]+")) {
             logger.log(Level.INFO, "Getting the value for key " + pieces[1]);
-            get(pieces[1], pieces[3]);
+            get(pieces[1], Integer.parseInt(pieces[3]));
         }
         else if (cmd.matches("put [^\\s]+ [^\\s]+ to [0-9]+")) {
             logger.log(Level.INFO, "Putting into key " + pieces[1] + " the value " + pieces[2]);
-            put(pieces[1], pieces[2], pieces[4]);
+            put(pieces[1], pieces[2], Integer.parseInt(pieces[4]));
         }
         else {
             logger.log(Level.WARNING, "Unknown command or wrong syntax, no action taken");
