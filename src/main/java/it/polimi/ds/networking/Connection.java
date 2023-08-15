@@ -13,9 +13,11 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public abstract class Connection {
     private final Socket socket;
@@ -27,7 +29,7 @@ public abstract class Connection {
 
     private final Queue<Message> inbox = new LinkedList<>();
 
-    private final Map<MessageFilter, BiConsumer<Connection, Message>> bindings = new HashMap<MessageFilter, BiConsumer<Connection, Message>>();
+    private final Map<MessageFilter, BiPredicate<Connection, Message>> bindings = new HashMap<>();
 
     protected Connection(Socket socket, SafeLogger logger) throws IOException {
         this.socket = socket;
@@ -55,7 +57,7 @@ public abstract class Connection {
      * @param filter a list of class that compose the filter
      * @return the first received message or in queue to be processed that matches the filter
      */
-    public Message waitMessage(MessageFilter filter) {
+    /*public Message waitMessage(MessageFilter filter) {
         Message m = pollFirstMatch(filter); // eventual message that was received before the call of waitMessage
         while (m == null) {  // if no compatible found wait for one
             try {
@@ -67,7 +69,7 @@ public abstract class Connection {
             }
         }
         return m;
-    }
+    }*/
 
     /**
      * remove the first matching message from messagesToProcess queue and returns it
@@ -100,9 +102,15 @@ public abstract class Connection {
         return message.getKey().equals(filter.getKey());
     }
 
-    public void bindToMessage(MessageFilter filter, BiConsumer<Connection, Message> action) {
+    public void bindToMessage(MessageFilter filter, BiPredicate<Connection, Message> action) {
         synchronized (bindings) {
             bindings.put(filter, action);
+        }
+    }
+
+    public void clearBindings(String key) {
+        synchronized (bindings) {
+            bindings.keySet().stream().filter(e->e.getKey().equals(key)).toList().forEach(bindings.keySet()::remove);
         }
     }
 
@@ -114,9 +122,9 @@ public abstract class Connection {
                 Message msg = (Message) reader.readObject();
                 if(!matchBinding(msg)) {
                     synchronized (inbox) {
-                        inbox.add(msg);
+                        inbox.add(msg); //TODO: fifo channels
                     }
-                    notifyAll();
+                    //notifyAll();
                 }
             } catch (IOException e) {
                 toLog = "IOException when reading message: " + e.getMessage();
@@ -127,10 +135,9 @@ public abstract class Connection {
 
     Boolean matchBinding(Message m) {
         synchronized (bindings) {
-            for (Map.Entry<MessageFilter, BiConsumer<Connection, Message>> b : bindings.entrySet()) {
+            for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.entrySet()) {
                 if(matchFilter(m, b.getKey())) {
-                    b.getValue().accept(this, m);
-                    return true;
+                    return b.getValue().test(this, m);
                 }
             }
             return false;

@@ -1,19 +1,13 @@
 package it.polimi.ds.node;
 
-import it.polimi.ds.networking.Address;
-import it.polimi.ds.networking.AddressConnection;
-import it.polimi.ds.networking.Connection;
-import it.polimi.ds.networking.Topology;
+import it.polimi.ds.networking.*;
+import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 
-import javax.swing.plaf.basic.BasicInternalFrameTitlePane;
-import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.io.File;
 import java.util.Scanner;
 
@@ -144,6 +138,150 @@ public class Node {
         }
     }
 
+    void changeLabel(String key, Label newLabel) {
+        for (Connection c : peers.values()) {
+            c.clearBindings(key);
+        }
+        db.get(key).getState().label = newLabel;
+        db.get(key).getState().ackCounter = 0;
+        db.get(key).getState().writeMaxVersion = -1;
+        for (Connection c : peers.values()) {
+            if (newLabel == Label.Idle) {
+                c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
+                c.bindToMessage(new MessageFilter(key, PutRequest.class), this::onPutRequest);
+                db.get(key).getState().toWrite = null;
+                db.get(key).getState().coordinator = null;
+            }
+            else if (newLabel == Label.Ready) {
+                c.bindToMessage(new MessageFilter(key, Abort.class), this::onAbort);
+                c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
+                c.bindToMessage(new MessageFilter(key, Write.class), this::onWrite);
+            }
+            else if (newLabel == Label.Waiting) {
+                c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactRequest);
+                c.bindToMessage(new MessageFilter(key, Nack.class), this::onNack);
+            }            
+        }
+    }
 
+    boolean onAbort(Connection c, Message msg) {
+        //TODO: handle late abort
+        changeLabel(msg.getKey(), Label.Idle);
+        return true;
+    }
+
+    boolean onContactRequest(Connection c, Message msg) {
+        int node = new ArrayList<>(peers.values()).indexOf(c);
+        State s = db.get(msg.getKey()).getState();
+        if(db.get(msg.getKey()).getState().label == Label.Waiting) {
+            if (node > my_id) {
+                changeLabel(msg.getKey(), Label.Aborted);
+                for(int i = my_id; i < my_id + write_quorum; i++) {
+                    peers.get(i % peers.size()).send(new Abort(msg.getKey()));
+                }
+                changeLabel(msg.getKey(), Label.Ready);
+                s.coordinator = node;
+                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
+            }
+            else {
+                return false;
+            }
+        }
+        else if (db.get(msg.getKey()).getState().label == Label.Ready){
+            if (node > s.coordinator) {
+                c.send(new Nack(msg.getKey(), s.coordinator));
+            }
+            else {
+                return false;
+            }
+        }
+        else if (db.get(msg.getKey()).getState().label == Label.Idle){
+            changeLabel(msg.getKey(), Label.Ready);
+            s.coordinator = node;
+            c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
+        }
+        return true;
+    }
+
+    boolean onContactResponse(Connection ignored, Message msg) {
+        //TODO: synchronize all callbacks on the key?
+        ContactResponse contactResponse = (ContactResponse) msg;
+        State s = db.get(msg.getKey()).getState();
+        s.ackCounter++;
+        if (contactResponse.getVersion() > s.writeMaxVersion)
+            s.writeMaxVersion = contactResponse.getVersion();
+        if (s.ackCounter == write_quorum) {
+            changeLabel(contactResponse.getKey(), Label.Committed);
+            for(int i = my_id; i < my_id + write_quorum; i++) {
+                peers.get(i % peers.size()).send(new Write(msg.getKey(), s.toWrite, s.writeMaxVersion+1));
+            }
+            changeLabel(contactResponse.getKey(), Label.Idle);
+        }
+        return true;
+    }
+
+    boolean onGetRequest(Connection c, Message msg) {
+        GetRequest getRequest = (GetRequest) msg;
+        State s = db.get(msg.getKey()).getState();
+        if (!s.reading) {
+            s.reading = true;
+            s.readClient = c;
+            for(int i = my_id; i < my_id + read_quorum; i++) {
+                peers.get(i % peers.size()).send(new Read(msg.getKey()));
+            }
+            return  true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    boolean onNack(Connection ignored, Message msg) {
+        Nack nack = (Nack) msg;
+        peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey()));
+        return true;
+    }
+
+    boolean onPutRequest(Connection ignored, Message msg) {
+        PutRequest putRequest = (PutRequest) msg;
+        changeLabel(msg.getKey(), Label.Waiting);
+        db.get(msg.getKey()).getState().toWrite = putRequest.getValue();
+        for(int i = my_id; i < my_id + write_quorum; i++) {
+            peers.get(i % peers.size()).send(new ContactRequest(msg.getKey()));
+        }
+        return true;
+    }
+
+    boolean onRead(Connection c, Message msg) {
+        c.send(new ReadResponse(msg.getKey(), db.get(msg.getKey()).getValue(), db.get(msg.getKey()).getVersion()));
+        return true;
+    }
+
+    boolean onReadResponse(Connection ignored, Message msg) {
+        ReadResponse readResponse = (ReadResponse) msg;
+        State s = db.get(msg.getKey()).getState();
+        s.readCounter++;
+        if (readResponse.getVersion() > s.readMaxVersion) {
+            s.readMaxVersion = readResponse.getVersion();
+            s.latestValue = readResponse.getValue();
+        }
+        if (s.readCounter == read_quorum) {
+            s.readClient.send(new GetResponse(msg.getKey(), s.latestValue, s.readMaxVersion));
+            s.readMaxVersion = -1;
+            s.latestValue = null;
+            s.readClient = null;
+            s.readCounter = 0;
+            s.reading = false;
+        }
+        return true;
+    }
+
+    boolean onWrite(Connection ignored, Message msg) {
+        Write write = (Write) msg; 
+        db.get(write.getKey()).setValue(write.getValue());
+        db.get(write.getKey()).setVersion(write.getVersion());
+        changeLabel(write.getKey(), Label.Idle);
+        return true;
+    }
 }
 

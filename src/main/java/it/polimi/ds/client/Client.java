@@ -56,10 +56,11 @@ public class Client {
         connection.bindToMessage(new MessageFilter(key, GetResponse.class), this::logGetResponse);
     }
 
-    void logGetResponse(Connection c, Message msg) {
+    boolean logGetResponse(Connection c, Message msg) {
         GetResponse res = (GetResponse) msg;
         logger.log(Level.INFO, "Suvvessfully got value " + res.getValue() + " with version " + res.getVersion());
         c.stop();
+        return true;
     }
 
     void put(String key, String value, int node) throws IOException {
@@ -68,9 +69,10 @@ public class Client {
         connection.bindToMessage(new MessageFilter(key, PutResponse.class), this::logPutResponse);
     }
 
-    void logPutResponse(Connection c, Message msg) {
+    boolean logPutResponse(Connection c, Message msg) {
         PutResponse res = (PutResponse) msg;
         logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
         c.stop();
+        return true;
     }
 }
