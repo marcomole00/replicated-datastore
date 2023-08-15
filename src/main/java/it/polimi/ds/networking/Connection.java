@@ -1,6 +1,7 @@
 package it.polimi.ds.networking;
 
 import it.polimi.ds.networking.messages.Message;
+import it.polimi.ds.utils.SafeLogger;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -19,7 +20,7 @@ public abstract class Connection {
     private final Socket socket;
     protected final ObjectInputStream reader;
     protected final ObjectOutputStream writer;
-    private final Logger logger;
+    private final SafeLogger logger;
 
     private final Thread listenThread;
 
@@ -27,7 +28,7 @@ public abstract class Connection {
 
     private final Map<MessageFilter, Consumer<Message>> bindings = new HashMap<MessageFilter, Consumer<Message>>();
 
-    protected Connection(Socket socket, Logger logger) throws IOException {
+    protected Connection(Socket socket, SafeLogger logger) throws IOException {
         this.socket = socket;
         writer = new ObjectOutputStream(socket.getOutputStream());
         reader = new ObjectInputStream(socket.getInputStream());
