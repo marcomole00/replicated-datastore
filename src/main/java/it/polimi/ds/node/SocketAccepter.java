@@ -13,11 +13,11 @@ import java.util.logging.Level;
 
 public class SocketAccepter implements  Runnable{
 
-    private ServerSocket serverSocket;
-    private HashMap<Integer, Connection> peers;
-    private Topology topology;
+    private final ServerSocket serverSocket;
+    private  final HashMap<Integer, Connection> peers;
+    private final Topology topology;
 
-    private SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
+    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
 
 
 
@@ -31,21 +31,27 @@ public class SocketAccepter implements  Runnable{
     @Override
     public void run() {
 
-        while (true) {
+        while (peers.size() < topology.getNodes().size() - 1) {
            try {
-              Socket socket =  serverSocket.accept();
+              Socket socket = serverSocket.accept();
               int id = topology.getId(socket.getInetAddress().getHostAddress());
                 if (id == -1) {
                     logger.log(Level.WARNING ,"Received connection from unknown address " + socket.getInetAddress().getHostAddress());
                     continue;
                 }
 
+                System.out.println("Received connection from " + id + " from port " + socket.getPort());
+
                Connection connection = new SocketConnection(socket, logger);
-              peers.put(id, connection);
+              synchronized ( peers) {
+                  peers.put(id, connection);
+              }
            } catch (Exception e) {
                e.printStackTrace();
            }
         }
+
+        System.out.println("Socket accepter finished");
 
     }
 }

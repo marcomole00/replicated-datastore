@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.io.File;
 import java.util.Scanner;
 
+import static java.lang.Thread.sleep;
+
 public class Node {
 
    private  HashMap<Integer, Connection> peers = new HashMap<>();
@@ -92,19 +94,26 @@ public class Node {
             return ;
         }
 
-        ipAutoDiscovery();
+       serverSocket =  ipAutoDiscovery();
 
-        serverSocket = new ServerSocket(my_address.getPort());
 
+        SocketAccepter socketAccepter = new SocketAccepter(serverSocket, peers, topology);
+        Thread accepterThread = new Thread(socketAccepter);
+        accepterThread.start();
+
+        PeerConnector peerConnector = new PeerConnector(peers, topology, my_id);
+        Thread connectorThread = new Thread(peerConnector);
+        connectorThread.start();
 
 
 
     }
 
 
-    public void ipAutoDiscovery() throws Exception {
+    public ServerSocket ipAutoDiscovery() throws Exception {
+
+        ServerSocket serverSocket = null;
         try {
-            boolean tobreak = false;
             InetAddress inet = InetAddress.getLocalHost();
             InetAddress[] ips = InetAddress.getAllByName(inet.getCanonicalHostName());
             if (ips  != null ) {
@@ -112,30 +121,45 @@ public class Node {
                     System.out.println("IP address: " + ips[i].getHostAddress());
                     for (int j = 0; j < topology.getNodes().size(); j++) {
                         if (ips[i].getHostAddress().equals(topology.getIp(j))) {
+
                             my_id = j;
-                            System.out.println("My id is " + my_id);
 
                             my_address = topology.getNodes().get(j);
 
-                            System.out.println("My address is " + my_address);
-                            tobreak = true;
-                            break;
+
+                            try {
+                                serverSocket = new ServerSocket(my_address.getPort());
+                                // the node found its address and a free socket.
+                                System.out.println("Server socket opened on port " + my_address.getPort());
+                                System.out.println("My id is " + my_id);
+                                return serverSocket;
+                            } catch (Exception e) {
+                                // the node found its address but the socket is already in use.
+                                // the
+                            }
+
                         }
                     }
 
-                    if (tobreak) {
-                        break;
-                    }
                 }
 
                 if (my_id == -1) {
                     throw  new Exception("Error in reading the topology file, my ip is not in the topology");
                 }
+
+
+            } else {
+                throw  new Exception("No ips found for the local host");
             }
         } catch (Exception  e) {
             System.out.println("Error in getting the local host");
             throw e;
         }
+
+        if (serverSocket == null) {
+            throw new Exception("Error in opening the server socket");
+        }
+        return serverSocket;
     }
 
     void changeLabel(String key, Label newLabel) {
