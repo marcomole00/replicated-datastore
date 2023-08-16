@@ -3,6 +3,9 @@ package it.polimi.ds.node;
 import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.MutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -10,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.io.File;
 import java.util.Scanner;
+import java.util.Stack;
 
 import static java.lang.Thread.sleep;
 
@@ -28,6 +32,8 @@ public class Node {
     private Topology topology = new Topology();
 
     HashMap<String, Entry> db = new HashMap<>();
+
+    Stack<Pair<Connection, PutRequest>> aborted = new Stack<>();
 
     public void run() throws Exception {
 
@@ -106,7 +112,10 @@ public class Node {
         connectorThread.start();
 
 
-
+        for (Connection p : peers.values()) {
+            p.bindToMessage(new MessageFilter("", Read.class), this::onRead);
+            p.bindToMessage(new MessageFilter("", Read.class), this::onReadResponse);
+        }
     }
 
 
@@ -175,22 +184,31 @@ public class Node {
         db.get(key).getState().label = newLabel;
         db.get(key).getState().ackCounter = 0;
         db.get(key).getState().writeMaxVersion = -1;
-        for (Connection c : peers.values()) {
-            if (newLabel == Label.Idle) {
-                c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
-                c.bindToMessage(new MessageFilter(key, PutRequest.class), this::onPutRequest);
-                db.get(key).getState().toWrite = null;
-                db.get(key).getState().coordinator = null;
+        if (newLabel == Label.Idle && !aborted.isEmpty()) {
+            Pair<Connection, PutRequest> p = aborted.pop();
+            onPutRequest(p.getLeft(), p.getRight());
+        }
+        else {
+            for (Connection c : peers.values()) {
+                if (newLabel == Label.Idle) {
+                    c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
+                    db.get(key).getState().toWrite = null;
+                    db.get(key).getState().coordinator = null;
+                } else if (newLabel == Label.Ready) {
+                    c.bindToMessage(new MessageFilter(key, Abort.class), this::onAbort);
+                    c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
+                    c.bindToMessage(new MessageFilter(key, Write.class), this::onWrite);
+                } else if (newLabel == Label.Waiting) {
+                    c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactRequest);
+                    c.bindToMessage(new MessageFilter(key, Nack.class), this::onNack);
+                    c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactResponse);
+                }
             }
-            else if (newLabel == Label.Ready) {
-                c.bindToMessage(new MessageFilter(key, Abort.class), this::onAbort);
-                c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
-                c.bindToMessage(new MessageFilter(key, Write.class), this::onWrite);
+            for (Connection c : peers.values()) { //TODO: use clients list instead
+                if (newLabel == Label.Idle) {
+                    c.bindToMessage(new MessageFilter(key, PutRequest.class), this::onPutRequest);
+                }
             }
-            else if (newLabel == Label.Waiting) {
-                c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactRequest);
-                c.bindToMessage(new MessageFilter(key, Nack.class), this::onNack);
-            }            
         }
     }
 
@@ -210,6 +228,7 @@ public class Node {
                 for(int i = my_id; i < my_id + write_quorum; i++) {
                     peers.get(i % peers.size()).send(new Abort(msg.getKey()));
                 }
+                aborted.push(new ImmutablePair<>(s.writeClient, new PutRequest(msg.getKey(), s.toWrite)));
                 changeLabel(msg.getKey(), Label.Ready);
                 s.coordinator = node;
                 c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
@@ -246,6 +265,8 @@ public class Node {
             for(int i = my_id; i < my_id + write_quorum; i++) {
                 peers.get(i % peers.size()).send(new Write(msg.getKey(), s.toWrite, s.writeMaxVersion+1));
             }
+            s.writeClient.send(new PutResponse(msg.getKey(), s.writeMaxVersion+1));
+            s.writeClient.stop();
             changeLabel(contactResponse.getKey(), Label.Idle);
         }
         return true;
@@ -301,6 +322,7 @@ public class Node {
         }
         if (s.readCounter == read_quorum) {
             s.readClient.send(new GetResponse(msg.getKey(), s.latestValue, s.readMaxVersion));
+            s.readClient.stop();
             s.readMaxVersion = -1;
             s.latestValue = null;
             s.readClient = null;
