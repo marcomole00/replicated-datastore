@@ -4,7 +4,6 @@ import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.InetAddress;
@@ -14,7 +13,6 @@ import java.net.Socket;
 import java.util.*;
 import java.io.File;
 import java.util.logging.Level;
-import java.util.stream.Stream;
 
 import static java.lang.Thread.sleep;
 
@@ -210,39 +208,39 @@ public class Node {
 
     void putIfNotPresent(String key) {
         if (!db.containsKey(key)) {
-            db.put(key, new Entry(null, 0, new State()));
+            db.put(key, new Entry(null, 0, new Metadata()));
         }
     }
 
-    void changeLabel(String key, Label newLabel) {
+    void changeLabel(String key, State newState) {
         for (Connection c : peers.values()) {
             c.clearBindings(key);
         }
-        db.get(key).getState().label = newLabel;
-        db.get(key).getState().ackCounter = 0;
-        db.get(key).getState().writeMaxVersion = -1;
-        if (newLabel == Label.Idle && !aborted.isEmpty()) {
+        db.get(key).getMetadata().state = newState;
+        db.get(key).getMetadata().ackCounter = 0;
+        db.get(key).getMetadata().writeMaxVersion = -1;
+        if (newState == State.Idle && !aborted.isEmpty()) {
             Pair<Connection, PutRequest> p = aborted.pop();
             onPutRequest(p.getLeft(), p.getRight());
         }
         else {
             for (Connection c : peers.values()) {
-                if (newLabel == Label.Idle) {
+                if (newState == State.Idle) {
                     c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
-                    db.get(key).getState().toWrite = null;
-                    db.get(key).getState().coordinator = null;
-                } else if (newLabel == Label.Ready) {
+                    db.get(key).getMetadata().toWrite = null;
+                    db.get(key).getMetadata().coordinator = null;
+                } else if (newState == State.Ready) {
                     c.bindToMessage(new MessageFilter(key, Abort.class), this::onAbort);
                     c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
                     c.bindToMessage(new MessageFilter(key, Write.class), this::onWrite);
-                } else if (newLabel == Label.Waiting) {
+                } else if (newState == State.Waiting) {
                     c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactRequest);
                     c.bindToMessage(new MessageFilter(key, Nack.class), this::onNack);
                     c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactResponse);
                 }
             }
             for (Connection c : peers.values()) { //TODO: use clients list instead
-                if (newLabel == Label.Idle) {
+                if (newState == State.Idle) {
                     c.bindToMessage(new MessageFilter(key, PutRequest.class), this::onPutRequest);
                 }
             }
@@ -251,40 +249,40 @@ public class Node {
 
     boolean onAbort(Connection c, Message msg) {
         //TODO: handle late abort
-        changeLabel(msg.getKey(), Label.Idle);
+        changeLabel(msg.getKey(), State.Idle);
         return true;
     }
 
     boolean onContactRequest(Connection c, Message msg) {
         putIfNotPresent(msg.getKey());
         int node = new ArrayList<>(peers.values()).indexOf(c);
-        State s = db.get(msg.getKey()).getState();
-        if(db.get(msg.getKey()).getState().label == Label.Waiting) {
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        if(db.get(msg.getKey()).getMetadata().state == State.Waiting) {
             if (node > my_id) {
-                changeLabel(msg.getKey(), Label.Aborted);
+                changeLabel(msg.getKey(), State.Aborted);
                 for(int i = my_id+1; i < my_id + write_quorum; i++) {
                     peers.get(i % peers.size()).send(new Abort(msg.getKey()));
                 }
-                aborted.push(new ImmutablePair<>(s.writeClient, new PutRequest(msg.getKey(), s.toWrite)));
-                changeLabel(msg.getKey(), Label.Ready);
-                s.coordinator = node;
+                aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
+                changeLabel(msg.getKey(), State.Ready);
+                metadata.coordinator = node;
                 c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
             }
             else {
                 return false;
             }
         }
-        else if (db.get(msg.getKey()).getState().label == Label.Ready){
-            if (node > s.coordinator) {
-                c.send(new Nack(msg.getKey(), s.coordinator));
+        else if (db.get(msg.getKey()).getMetadata().state == State.Ready){
+            if (node > metadata.coordinator) {
+                c.send(new Nack(msg.getKey(), metadata.coordinator));
             }
             else {
                 return false;
             }
         }
-        else if (db.get(msg.getKey()).getState().label == Label.Idle){
-            changeLabel(msg.getKey(), Label.Ready);
-            s.coordinator = node;
+        else if (db.get(msg.getKey()).getMetadata().state == State.Idle){
+            changeLabel(msg.getKey(), State.Ready);
+            metadata.coordinator = node;
             c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
         }
         return true;
@@ -293,18 +291,18 @@ public class Node {
     boolean onContactResponse(Connection ignored, Message msg) {
         //TODO: synchronize all callbacks on the key?
         ContactResponse contactResponse = (ContactResponse) msg;
-        State s = db.get(msg.getKey()).getState();
-        s.ackCounter++;
-        if (contactResponse.getVersion() > s.writeMaxVersion)
-            s.writeMaxVersion = contactResponse.getVersion();
-        if (s.ackCounter == write_quorum-1) {
-            changeLabel(contactResponse.getKey(), Label.Committed);
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        metadata.ackCounter++;
+        if (contactResponse.getVersion() > metadata.writeMaxVersion)
+            metadata.writeMaxVersion = contactResponse.getVersion();
+        if (metadata.ackCounter == write_quorum-1) {
+            changeLabel(contactResponse.getKey(), State.Committed);
             for(int i = my_id+1; i < my_id + write_quorum; i++) {
-                peers.get(i % peers.size()).send(new Write(msg.getKey(), s.toWrite, s.writeMaxVersion+1));
+                peers.get(i % peers.size()).send(new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1));
             }
-            s.writeClient.send(new PutResponse(msg.getKey(), s.writeMaxVersion+1));
-            s.writeClient.stop();
-            changeLabel(contactResponse.getKey(), Label.Idle);
+            metadata.writeClient.send(new PutResponse(msg.getKey(), metadata.writeMaxVersion+1));
+            metadata.writeClient.stop();
+            changeLabel(contactResponse.getKey(), State.Idle);
         }
         return true;
     }
@@ -313,10 +311,10 @@ public class Node {
         //GetRequest getRequest = (GetRequest) msg;
         System.out.println("Received get request for key " + msg.getKey());
         putIfNotPresent(msg.getKey());
-        State s = db.get(msg.getKey()).getState();
-        if (!s.reading) {
-            s.reading = true;
-            s.readClient = c;
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        if (!metadata.reading) {
+            metadata.reading = true;
+            metadata.readClient = c;
             for(int i = my_id+1; i < my_id + read_quorum; i++) {
                 peers.get(i % peers.size()).send(new Read(msg.getKey()));
             }
@@ -337,9 +335,9 @@ public class Node {
         System.out.println("Received put request for key " + msg.getKey());
         PutRequest putRequest = (PutRequest) msg;
         putIfNotPresent(msg.getKey());
-        changeLabel(msg.getKey(), Label.Waiting);
-        db.get(msg.getKey()).getState().toWrite = putRequest.getValue();
-        db.get(msg.getKey()).getState().writeClient = c;
+        changeLabel(msg.getKey(), State.Waiting);
+        db.get(msg.getKey()).getMetadata().toWrite = putRequest.getValue();
+        db.get(msg.getKey()).getMetadata().writeClient = c;
         for(int i = my_id+1; i < my_id + write_quorum; i++) {
             peers.get(i % peers.size()).send(new ContactRequest(msg.getKey()));
         }
@@ -362,20 +360,20 @@ public class Node {
 
     boolean onReadResponse(Connection ignored, Message msg) {
         ReadResponse readResponse = (ReadResponse) msg;
-        State s = db.get(msg.getKey()).getState();
-        s.readCounter++;
-        if (readResponse.getVersion() > s.readMaxVersion) {
-            s.readMaxVersion = readResponse.getVersion();
-            s.latestValue = readResponse.getValue();
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        metadata.readCounter++;
+        if (readResponse.getVersion() > metadata.readMaxVersion) {
+            metadata.readMaxVersion = readResponse.getVersion();
+            metadata.latestValue = readResponse.getValue();
         }
-        if (s.readCounter == read_quorum-1) {
-            s.readClient.send(new GetResponse(msg.getKey(), s.latestValue, s.readMaxVersion));
-            s.readClient.stop();
-            s.readMaxVersion = -1;
-            s.latestValue = null;
-            s.readClient = null;
-            s.readCounter = 0;
-            s.reading = false;
+        if (metadata.readCounter == read_quorum-1) {
+            metadata.readClient.send(new GetResponse(msg.getKey(), metadata.latestValue, metadata.readMaxVersion));
+            metadata.readClient.stop();
+            metadata.readMaxVersion = -1;
+            metadata.latestValue = null;
+            metadata.readClient = null;
+            metadata.readCounter = 0;
+            metadata.reading = false;
         }
         return true;
     }
@@ -384,7 +382,7 @@ public class Node {
         Write write = (Write) msg; 
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
-        changeLabel(write.getKey(), Label.Idle);
+        changeLabel(write.getKey(), State.Idle);
         return true;
     }
 }

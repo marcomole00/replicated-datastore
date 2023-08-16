@@ -2,10 +2,10 @@ package it.polimi.ds.node;
 
 import org.apache.commons.lang3.tuple.MutableTriple;
 
-public class Entry extends MutableTriple<String, Integer, State > {
+public class Entry extends MutableTriple<String, Integer, Metadata> {
 
-    public Entry(String value, Integer version, State state) {
-        super(value, version, state);
+    public Entry(String value, Integer version, Metadata metadata) {
+        super(value, version, metadata);
     }
     public String getValue() {
         return super.getLeft();
@@ -15,7 +15,7 @@ public class Entry extends MutableTriple<String, Integer, State > {
         return super.getMiddle();
     }
 
-    public State getState() {
+    public Metadata getMetadata() {
         return super.getRight();
     }
 
@@ -25,9 +25,5 @@ public class Entry extends MutableTriple<String, Integer, State > {
 
     public void setVersion(Integer version) {
         super.setMiddle(version);
-    }
-
-    public void setState(State state) {
-        super.setRight(state);
     }
 }
