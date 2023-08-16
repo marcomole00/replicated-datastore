@@ -145,12 +145,10 @@ public class Node {
                 connection.clearBindings(Topic.any());
                 connection.bindToMessage(new MessageFilter(Topic.any(), Read.class), this::onRead);
                 connection.bindToMessage(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
-
+                connection.bindToMessage(new MessageFilter(Topic.any(), ContactRequest.class), this::onContactRequest);
             }
-            return true;
         }
         return false;
-
     }
 
 
@@ -212,7 +210,7 @@ public class Node {
         }
     }
 
-    void changeLabel(String key, State newState) {
+    void changeState(String key, State newState) {
         for (Connection c : peers.values()) {
             c.clearBindings(Topic.fromString(key));
         }
@@ -244,7 +242,7 @@ public class Node {
 
     boolean onAbort(Connection c, Message msg) {
         //TODO: handle late abort
-        changeLabel(msg.getKey(), State.Idle);
+        changeState(msg.getKey(), State.Idle);
         return true;
     }
 
@@ -254,12 +252,12 @@ public class Node {
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if(db.get(msg.getKey()).getMetadata().state == State.Waiting) {
             if (node > my_id) {
-                changeLabel(msg.getKey(), State.Aborted);
+                changeState(msg.getKey(), State.Aborted);
                 for(int i = my_id+1; i < my_id + write_quorum; i++) {
                     peers.get(i % peers.size()).send(new Abort(msg.getKey()));
                 }
                 aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
-                changeLabel(msg.getKey(), State.Ready);
+                changeState(msg.getKey(), State.Ready);
                 metadata.coordinator = node;
                 c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
             }
@@ -276,7 +274,7 @@ public class Node {
             }
         }
         else if (db.get(msg.getKey()).getMetadata().state == State.Idle){
-            changeLabel(msg.getKey(), State.Ready);
+            changeState(msg.getKey(), State.Ready);
             metadata.coordinator = node;
             c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
         }
@@ -291,13 +289,17 @@ public class Node {
         if (contactResponse.getVersion() > metadata.writeMaxVersion)
             metadata.writeMaxVersion = contactResponse.getVersion();
         if (metadata.ackCounter == write_quorum-1) {
-            changeLabel(contactResponse.getKey(), State.Committed);
+            Write write = new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1);
+            PutResponse putResponse = new PutResponse(msg.getKey(), metadata.writeMaxVersion+1);
+            changeState(contactResponse.getKey(), State.Committed);
+            db.get(msg.getKey()).setValue(write.getValue());
+            db.get(msg.getKey()).setVersion(write.getVersion());
             for(int i = my_id+1; i < my_id + write_quorum; i++) {
-                peers.get(i % peers.size()).send(new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1));
+                peers.get(i % peers.size()).send(write);
             }
-            metadata.writeClient.send(new PutResponse(msg.getKey(), metadata.writeMaxVersion+1));
+            metadata.writeClient.send(putResponse);
             metadata.writeClient.stop();
-            changeLabel(contactResponse.getKey(), State.Idle);
+            changeState(contactResponse.getKey(), State.Idle);
         }
         return true;
     }
@@ -335,7 +337,7 @@ public class Node {
             aborted.push(new ImmutablePair<>(c, putRequest));
             return true;
         }
-        changeLabel(msg.getKey(), State.Waiting);
+        changeState(msg.getKey(), State.Waiting);
         metadata.toWrite = putRequest.getValue();
         metadata.writeClient = c;
         for(int i = my_id+1; i < my_id + write_quorum; i++) {
@@ -382,7 +384,7 @@ public class Node {
         Write write = (Write) msg; 
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
-        changeLabel(write.getKey(), State.Idle);
+        changeState(write.getKey(), State.Idle);
         return true;
     }
 }
