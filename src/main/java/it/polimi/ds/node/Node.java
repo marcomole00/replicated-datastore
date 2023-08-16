@@ -113,6 +113,7 @@ public class Node {
         connectorThread.start();
 
         accepterThread.join();
+        connectorThread.join();
 
 
 
@@ -125,8 +126,8 @@ public class Node {
         while (true) {
             Socket socket  = serverSocket.accept();
             Connection connection = new SocketConnection(socket, logger);
-            connection.bindToMessage(new MessageFilter("", GetRequest.class), this::onGetRequest);
-            connection.bindToMessage(new MessageFilter("", PutRequest.class), this::onPutRequest);
+            connection.bindToMessage(new MessageFilter("test", GetRequest.class), this::onGetRequest);
+            connection.bindToMessage(new MessageFilter("test", PutRequest.class), this::onPutRequest);
         }
     }
 
@@ -285,7 +286,7 @@ public class Node {
     }
 
     boolean onGetRequest(Connection c, Message msg) {
-        GetRequest getRequest = (GetRequest) msg;
+        //GetRequest getRequest = (GetRequest) msg;
         putIfNotPresent(msg.getKey());
         State s = db.get(msg.getKey()).getState();
         if (!s.reading) {

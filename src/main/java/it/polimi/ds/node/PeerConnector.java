@@ -29,9 +29,9 @@ public class PeerConnector implements  Runnable{
         @Override
         public void run() {
 
-            while (accepted_connections < topology.getNodes().size() - myId - 1) {
+            while (accepted_connections < topology.getNodes().size() - myId) {
                 try {
-                    for (int i = myId+1; i < topology.getNodes().size(); i++) {
+                    for (int i = myId; i < topology.getNodes().size(); i++) {
                         if (!peers.containsKey(i)) {
                             Address address = topology.getNodes().get(i);
                             Connection connection = new AddressConnection(address.getIp(), address.getPort(), logger);

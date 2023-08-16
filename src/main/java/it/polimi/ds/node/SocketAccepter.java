@@ -33,7 +33,7 @@ public class SocketAccepter implements  Runnable{
     @Override
     public void run() {
 
-        while (accepted_connections < myId) { // the id number is the number of incoming connection for that node
+        while (accepted_connections < myId + 1) { // the id number is the number of incoming connection for that node
            System.out.println("peer size " + peers.size() + " topology size " + topology.getNodes().size());
 
             try {

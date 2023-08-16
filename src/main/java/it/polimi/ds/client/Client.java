@@ -27,6 +27,7 @@ public class Client {
         topology = parseTopology();
 
         System.out.println(topology);
+        System.out.println("usage: get <key> from <node> | put <key> <value> to <node>");
         while (running) {
             String cmd = reader.readLine();
             runCommand(cmd);
