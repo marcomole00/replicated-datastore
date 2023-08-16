@@ -117,7 +117,7 @@ public class Node {
 
                 Connection connection = new SocketConnection(socket, logger);
 
-                connection.bindToMessage(new MessageFilter("", Presentation.class), this::onPresentation);
+                connection.bindToMessage(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -133,18 +133,18 @@ public class Node {
         Presentation p = (Presentation) message;
 
         if ( p.getId() < 0) {
-            connection.clearBindings("");
-            connection.bindToMessage(new MessageFilter("test", GetRequest.class), this::onGetRequest);
-            connection.bindToMessage(new MessageFilter("test", PutRequest.class), this::onPutRequest);
+            connection.clearBindings(Topic.any());
+            connection.bindToMessage(new MessageFilter(Topic.any(), GetRequest.class), this::onGetRequest);
+            connection.bindToMessage(new MessageFilter(Topic.any(), PutRequest.class), this::onPutRequest);
             System.out.println("a client connected");
         }
         else if (0 <= p.getId() && p.getId() < number_of_nodes) {
             synchronized (peers) {
                 peers.put(p.getId(), connection);
                 System.out.println("Received connection from " + p.getId());
-                connection.clearBindings("");
-                connection.bindToMessage(new MessageFilter("test", Read.class), this::onRead);
-                connection.bindToMessage(new MessageFilter("test", ReadResponse.class), this::onReadResponse);
+                connection.clearBindings(Topic.any());
+                connection.bindToMessage(new MessageFilter(Topic.any(), Read.class), this::onRead);
+                connection.bindToMessage(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
 
             }
             return true;
@@ -214,7 +214,7 @@ public class Node {
 
     void changeLabel(String key, State newState) {
         for (Connection c : peers.values()) {
-            c.clearBindings(key);
+            c.clearBindings(Topic.fromString(key));
         }
         db.get(key).getMetadata().state = newState;
         db.get(key).getMetadata().ackCounter = 0;
@@ -226,22 +226,17 @@ public class Node {
         else {
             for (Connection c : peers.values()) {
                 if (newState == State.Idle) {
-                    c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
                     db.get(key).getMetadata().toWrite = null;
                     db.get(key).getMetadata().coordinator = null;
                 } else if (newState == State.Ready) {
-                    c.bindToMessage(new MessageFilter(key, Abort.class), this::onAbort);
-                    c.bindToMessage(new MessageFilter(key, ContactRequest.class), this::onContactRequest);
-                    c.bindToMessage(new MessageFilter(key, Write.class), this::onWrite);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), Write.class), this::onWrite);
                 } else if (newState == State.Waiting) {
-                    c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactRequest);
-                    c.bindToMessage(new MessageFilter(key, Nack.class), this::onNack);
-                    c.bindToMessage(new MessageFilter(key, ContactResponse.class), this::onContactResponse);
-                }
-            }
-            for (Connection c : peers.values()) { //TODO: use clients list instead
-                if (newState == State.Idle) {
-                    c.bindToMessage(new MessageFilter(key, PutRequest.class), this::onPutRequest);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactRequest);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse);
                 }
             }
         }
@@ -335,9 +330,14 @@ public class Node {
         System.out.println("Received put request for key " + msg.getKey());
         PutRequest putRequest = (PutRequest) msg;
         putIfNotPresent(msg.getKey());
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        if (metadata.state != State.Idle) {
+            aborted.push(new ImmutablePair<>(c, putRequest));
+            return true;
+        }
         changeLabel(msg.getKey(), State.Waiting);
-        db.get(msg.getKey()).getMetadata().toWrite = putRequest.getValue();
-        db.get(msg.getKey()).getMetadata().writeClient = c;
+        metadata.toWrite = putRequest.getValue();
+        metadata.writeClient = c;
         for(int i = my_id+1; i < my_id + write_quorum; i++) {
             peers.get(i % peers.size()).send(new ContactRequest(msg.getKey()));
         }

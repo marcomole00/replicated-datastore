@@ -1,9 +1,6 @@
 package it.polimi.ds.client;
 
-import it.polimi.ds.networking.AddressConnection;
-import it.polimi.ds.networking.Connection;
-import it.polimi.ds.networking.MessageFilter;
-import it.polimi.ds.networking.Topology;
+import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 
@@ -61,7 +58,7 @@ public class Client {
         Connection connection = openConnection(node);
         connection.send(new Presentation(-1));
         connection.send(new GetRequest(key));
-        connection.bindToMessage(new MessageFilter(key, GetResponse.class), this::logGetResponse);
+        connection.bindToMessage(new MessageFilter(Topic.fromString(key), GetResponse.class), this::logGetResponse);
     }
 
     boolean logGetResponse(Connection c, Message msg) {
@@ -75,7 +72,7 @@ public class Client {
         Connection connection = openConnection(node);
         connection.send(new Presentation(-1));
         connection.send(new PutRequest(key, value));
-        connection.bindToMessage(new MessageFilter(key, PutResponse.class), this::logPutResponse);
+        connection.bindToMessage(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
     }
 
     boolean logPutResponse(Connection c, Message msg) {

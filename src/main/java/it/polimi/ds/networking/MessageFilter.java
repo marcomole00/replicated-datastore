@@ -6,15 +6,17 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class MessageFilter extends MutablePair<String, List<Class<?>>> {
+public class MessageFilter extends MutablePair<Topic, List<Class<?>>> {
 
-    public MessageFilter(String key, Class<?> c) {
-        super(key, Collections.singletonList(c));
+    public MessageFilter(Topic topic, Class<?> c) {
+        super(topic, Collections.singletonList(c));
     }
 
-    public MessageFilter(String key, List<Class<?>> classes) {
-        super(key, classes);
+    public MessageFilter(Topic topic, List<Class<?>> classes) {
+        super(topic, classes);
     }
+
+    Topic getTopic() {return getLeft();}
 
     List<Class<?>> getClasses() {
         return getRight();

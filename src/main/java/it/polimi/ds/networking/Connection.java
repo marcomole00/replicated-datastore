@@ -100,9 +100,9 @@ public abstract class Connection {
     static boolean matchFilter(Message message, MessageFilter filter) {
         for (Class<?> c: filter.getClasses()) {
             if(c.isInstance(message))
-                return true;
+                return filter.getTopic().match(message.getKey());
         }
-        return message.getKey().equals(filter.getKey());
+        return false;
     }
 
     public void bindToMessage(MessageFilter filter, BiPredicate<Connection, Message> action) {
@@ -112,9 +112,9 @@ public abstract class Connection {
         }
     }
 
-    public void clearBindings(String key) {
+    public void clearBindings(Topic topic) {
         synchronized (bindings) {
-            bindings.keySet().stream().filter(e->e.getKey().equals(key)).toList().forEach(bindings.keySet()::remove);
+            bindings.keySet().stream().filter(e->e.getTopic().contains(topic)).toList().forEach(bindings.keySet()::remove);
         }
     }
 
