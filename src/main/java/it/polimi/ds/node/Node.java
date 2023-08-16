@@ -9,6 +9,7 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.InetAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.io.File;
@@ -111,10 +112,21 @@ public class Node {
         Thread connectorThread = new Thread(peerConnector);
         connectorThread.start();
 
+        accepterThread.join();
+
+
+
 
         for (Connection p : peers.values()) {
             p.bindToMessage(new MessageFilter("", Read.class), this::onRead);
             p.bindToMessage(new MessageFilter("", Read.class), this::onReadResponse);
+        }
+
+        while (true) {
+            Socket socket  = serverSocket.accept();
+            Connection connection = new SocketConnection(socket, logger);
+            connection.bindToMessage(new MessageFilter("", GetRequest.class), this::onGetRequest);
+            connection.bindToMessage(new MessageFilter("", PutRequest.class), this::onPutRequest);
         }
     }
 

@@ -65,16 +65,8 @@ public class SocketAccepter implements  Runnable{
             c.clearBindings("");
         }
 
-        System.out.println("Socket accepter peer phase finished");
+        System.out.println("All peers are connected");
 
-
-        while (true) {
-            try {
-                Socket socket = serverSocket.accept();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
 
 
     }

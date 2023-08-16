@@ -43,5 +43,13 @@ public class Topology {
         return -1;
     }
 
+    public String toString() {
+        String s = "";
+        for (int i = 0; i < nodes.size(); i++) {
+            s += i + " " + getIp(i) + " " + getPort(i) + "\n";
+        }
+        return s;
+    }
+
 
 }

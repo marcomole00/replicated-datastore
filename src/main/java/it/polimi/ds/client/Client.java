@@ -8,8 +8,10 @@ import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Scanner;
 import java.util.logging.Level;
 
 public class Client {
@@ -21,6 +23,10 @@ public class Client {
     Topology topology = new Topology();
 
     public void run() throws IOException {
+
+        topology = parseTopology();
+
+        System.out.println(topology);
         while (running) {
             String cmd = reader.readLine();
             runCommand(cmd);
@@ -58,7 +64,7 @@ public class Client {
 
     boolean logGetResponse(Connection c, Message msg) {
         GetResponse res = (GetResponse) msg;
-        logger.log(Level.INFO, "Suvvessfully got value " + res.getValue() + " with version " + res.getVersion());
+        logger.log(Level.INFO, "Successfully got value " + res.getValue() + " with version " + res.getVersion());
         c.stop();
         return true;
     }
@@ -74,5 +80,36 @@ public class Client {
         logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
         c.stop();
         return true;
+    }
+
+
+    Topology parseTopology() throws IOException {
+
+        Topology topology = new Topology();
+        File file;
+        file = new File("config.txt");
+        int read_quorum ;
+        int write_quorum;
+
+        Scanner sc = new Scanner(file);
+
+        read_quorum = sc.nextInt();
+        write_quorum = sc.nextInt();
+
+        while (sc.hasNextLine()) {
+            String line = sc.nextLine();
+            if (line.isBlank()) {
+                continue;
+            }
+            String[] pieces = line.split(" ");
+            if (pieces.length != 2) {
+               throw  new IOException("Error in reading the topology file, line " + line + " is not formatted correctly");
+            }
+            int port = Integer.parseInt(pieces[1]);
+            topology.addNode(pieces[0], port);
+
+        }
+
+        return topology;
     }
 }
