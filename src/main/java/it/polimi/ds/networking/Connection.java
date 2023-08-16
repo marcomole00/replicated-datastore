@@ -57,19 +57,21 @@ public abstract class Connection {
      * @param filter a list of class that compose the filter
      * @return the first received message or in queue to be processed that matches the filter
      */
-    /*public Message waitMessage(MessageFilter filter) {
+    public Message waitMessage(MessageFilter filter) {
         Message m = pollFirstMatch(filter); // eventual message that was received before the call of waitMessage
         while (m == null) {  // if no compatible found wait for one
-            try {
-                wait();
-                m = pollFirstMatch(filter);
-            } catch (InterruptedException e) {
-                logger.log(Level.WARNING, "Interrupted", e);
-                Thread.currentThread().interrupt();
+            synchronized (this) {
+                try {
+                    wait();
+                    m = pollFirstMatch(filter);
+                } catch (InterruptedException e) {
+                    logger.log(Level.WARNING, "Interrupted", e);
+                    Thread.currentThread().interrupt();
+                }
             }
         }
         return m;
-    }*/
+    }
 
     /**
      * remove the first matching message from messagesToProcess queue and returns it
@@ -104,6 +106,7 @@ public abstract class Connection {
 
     public void bindToMessage(MessageFilter filter, BiPredicate<Connection, Message> action) {
         synchronized (bindings) {
+            logger.log(Level.INFO,"Binding " + filter + " to " + action);
             bindings.put(filter, action);
         }
     }
@@ -119,13 +122,15 @@ public abstract class Connection {
         logger.log(Level.INFO, toLog);
         while (isRunning()) {
             try {
+                synchronized (this){
                 Message msg = (Message) reader.readObject();
                 if(!matchBinding(msg)) {
                     synchronized (inbox) {
                         inbox.add(msg); //TODO: fifo channels
                         logger.log(Level.INFO, "Received message: " + msg);
                     }
-                    //notifyAll();
+                    notifyAll();
+                }
                 }
             } catch (IOException e) {
                 toLog = "IOException when reading message: " + e.getMessage();

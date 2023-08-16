@@ -17,20 +17,28 @@ public class SocketAccepter implements  Runnable{
 
     private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
 
+    private final int myId;
+
+    private  int accepted_connections = 0;
 
 
-    public SocketAccepter(ServerSocket serverSocket, HashMap<Integer, Connection> peers, Topology topology) {
+    public SocketAccepter(ServerSocket serverSocket, HashMap<Integer, Connection> peers, Topology topology, int id) {
         this.serverSocket = serverSocket;
         this.peers = peers;
         this.topology = topology;
+        this.myId = id;
 
     }
 
     @Override
     public void run() {
 
-        while (peers.size() < topology.getNodes().size() - 1) {
-           try {
+
+
+        while (accepted_connections < myId) { // the id number is the number of incoming connection for that node
+           System.out.println("peer size " + peers.size() + " topology size " + topology.getNodes().size());
+
+            try {
               Socket socket = serverSocket.accept();
               int id = topology.getId(socket.getInetAddress().getHostAddress());
                 if (id == -1) {
@@ -40,24 +48,36 @@ public class SocketAccepter implements  Runnable{
 
 
                Connection connection = new SocketConnection(socket, logger);
-               connection.bindToMessage(new MessageFilter("", Presentation.class), (c, m) -> {
+                Presentation p =  (Presentation) connection.waitMessage(new MessageFilter("", Presentation.class));
+
                    synchronized (peers) {
-                       Presentation p = (Presentation) m;
-                       peers.put(p.getId(), c);
+                       peers.put(p.getId(), connection);
                        System.out.println("Received connection from " + p.getId() + " from port " + socket.getPort());
-
+                       System.out.println("peers size" + peers.size());
+                       accepted_connections++;
                    }
-                   return true;
-               } );
 
-               connection.clearBindings("");
 
            } catch (Exception e) {
                e.printStackTrace();
            }
         }
 
-        System.out.println("Socket accepter finished");
+        for (Connection c : peers.values()) {
+            c.clearBindings("");
+        }
+
+        System.out.println("Socket accepter peer phase finished");
+
+
+        while (true) {
+            try {
+                Socket socket = serverSocket.accept();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
 
     }
 }

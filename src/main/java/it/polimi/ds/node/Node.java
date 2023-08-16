@@ -97,7 +97,7 @@ public class Node {
        serverSocket =  ipAutoDiscovery();
 
 
-        SocketAccepter socketAccepter = new SocketAccepter(serverSocket, peers, topology);
+        SocketAccepter socketAccepter = new SocketAccepter(serverSocket, peers, topology, my_id);
         Thread accepterThread = new Thread(socketAccepter);
         accepterThread.start();
 

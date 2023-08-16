@@ -12,4 +12,11 @@ public class Presentation extends Message {
     public int getId() {
         return id;
     }
+
+    @Override
+    public String toString() {
+        return "Presentation{" +
+                "id=" + id +
+                '}';
+    }
 }
