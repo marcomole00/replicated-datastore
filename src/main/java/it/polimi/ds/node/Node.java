@@ -8,13 +8,13 @@ import org.apache.commons.lang3.tuple.MutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 import java.io.File;
-import java.util.Scanner;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import static java.lang.Thread.sleep;
 
@@ -161,8 +161,7 @@ public class Node {
 
         ServerSocket serverSocket = null;
         try {
-            InetAddress inet = InetAddress.getLocalHost();
-            InetAddress[] ips = InetAddress.getAllByName(inet.getCanonicalHostName());
+            InetAddress[] ips = Collections.list(NetworkInterface.getNetworkInterfaces()).stream().map(i -> Collections.list(i.getInetAddresses()).get(1)).toArray(InetAddress[]::new);
             if (ips  != null ) {
                 for (int i= 0; i < ips.length; i++) {
                     System.out.println("IP address: " + ips[i].getHostAddress());
