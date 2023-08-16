@@ -60,16 +60,17 @@ public abstract class Connection {
     public Message waitMessage(MessageFilter filter) {
         Message m = pollFirstMatch(filter); // eventual message that was received before the call of waitMessage
         while (m == null) {  // if no compatible found wait for one
-            synchronized (this) {
+
                 try {
-                    wait();
-                    m = pollFirstMatch(filter);
+                    synchronized (this) {
+                        wait();
+                        m = pollFirstMatch(filter);
+                    }
                 } catch (InterruptedException e) {
                     logger.log(Level.WARNING, "Interrupted", e);
                     Thread.currentThread().interrupt();
                 }
             }
-        }
         return m;
     }
 
@@ -122,16 +123,18 @@ public abstract class Connection {
         logger.log(Level.INFO, toLog);
         while (isRunning()) {
             try {
-                synchronized (this){
+
                 Message msg = (Message) reader.readObject();
                 if(!matchBinding(msg)) {
                     synchronized (inbox) {
                         inbox.add(msg); //TODO: fifo channels
                         logger.log(Level.INFO, "Received message: " + msg);
                     }
-                    notifyAll();
+                    synchronized (this) {
+                        notifyAll();
+                    }
                 }
-                }
+
             } catch (IOException e) {
                 toLog = "IOException when reading message: " + e.getMessage();
                 logger.log(Level.SEVERE, toLog);
