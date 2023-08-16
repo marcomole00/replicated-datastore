@@ -123,6 +123,7 @@ public abstract class Connection {
                 if(!matchBinding(msg)) {
                     synchronized (inbox) {
                         inbox.add(msg); //TODO: fifo channels
+                        logger.log(Level.INFO, "Received message: " + msg);
                     }
                     //notifyAll();
                 }

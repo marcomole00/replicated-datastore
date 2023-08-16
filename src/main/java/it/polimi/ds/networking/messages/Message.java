@@ -1,6 +1,6 @@
 package it.polimi.ds.networking.messages;
 
-public abstract class Message {
+public abstract class Message implements java.io.Serializable{
     private final String key;
 
     Message(String key) {

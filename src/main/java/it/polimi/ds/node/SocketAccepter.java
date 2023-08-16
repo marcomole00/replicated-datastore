@@ -1,9 +1,7 @@
 package it.polimi.ds.node;
 
-import it.polimi.ds.networking.Address;
-import it.polimi.ds.networking.Connection;
-import it.polimi.ds.networking.SocketConnection;
-import it.polimi.ds.networking.Topology;
+import it.polimi.ds.networking.*;
+import it.polimi.ds.networking.messages.Presentation;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.net.ServerSocket;
@@ -40,12 +38,20 @@ public class SocketAccepter implements  Runnable{
                     continue;
                 }
 
-                System.out.println("Received connection from " + id + " from port " + socket.getPort());
 
                Connection connection = new SocketConnection(socket, logger);
-              synchronized ( peers) {
-                  peers.put(id, connection);
-              }
+               connection.bindToMessage(new MessageFilter("", Presentation.class), (c, m) -> {
+                   synchronized (peers) {
+                       Presentation p = (Presentation) m;
+                       peers.put(p.getId(), c);
+                       System.out.println("Received connection from " + p.getId() + " from port " + socket.getPort());
+
+                   }
+                   return true;
+               } );
+
+               connection.clearBindings("");
+
            } catch (Exception e) {
                e.printStackTrace();
            }
