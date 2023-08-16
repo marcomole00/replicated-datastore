@@ -273,7 +273,7 @@ public class Node {
         s.ackCounter++;
         if (contactResponse.getVersion() > s.writeMaxVersion)
             s.writeMaxVersion = contactResponse.getVersion();
-        if (s.ackCounter == write_quorum) {
+        if (s.ackCounter == write_quorum-1) {
             changeLabel(contactResponse.getKey(), Label.Committed);
             for(int i = my_id+1; i < my_id + write_quorum; i++) {
                 peers.get(i % peers.size()).send(new Write(msg.getKey(), s.toWrite, s.writeMaxVersion+1));
@@ -333,7 +333,7 @@ public class Node {
             s.readMaxVersion = readResponse.getVersion();
             s.latestValue = readResponse.getValue();
         }
-        if (s.readCounter == read_quorum) {
+        if (s.readCounter == read_quorum-1) {
             s.readClient.send(new GetResponse(msg.getKey(), s.latestValue, s.readMaxVersion));
             s.readClient.stop();
             s.readMaxVersion = -1;
