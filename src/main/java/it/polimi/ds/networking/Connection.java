@@ -114,7 +114,7 @@ public abstract class Connection {
 
     public void clearBindings(Topic topic) {
         synchronized (bindings) {
-            bindings.keySet().stream().filter(e->e.getTopic().contains(topic)).toList().forEach(bindings.keySet()::remove);
+            bindings.keySet().stream().filter(e->topic.contains(e.getTopic())).toList().forEach(bindings.keySet()::remove);
         }
     }
 
