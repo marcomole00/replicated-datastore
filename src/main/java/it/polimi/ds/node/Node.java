@@ -238,7 +238,7 @@ public class Node {
         if(db.get(msg.getKey()).getState().label == Label.Waiting) {
             if (node > my_id) {
                 changeLabel(msg.getKey(), Label.Aborted);
-                for(int i = my_id; i < my_id + write_quorum; i++) {
+                for(int i = my_id+1; i < my_id + write_quorum; i++) {
                     peers.get(i % peers.size()).send(new Abort(msg.getKey()));
                 }
                 aborted.push(new ImmutablePair<>(s.writeClient, new PutRequest(msg.getKey(), s.toWrite)));
@@ -275,7 +275,7 @@ public class Node {
             s.writeMaxVersion = contactResponse.getVersion();
         if (s.ackCounter == write_quorum) {
             changeLabel(contactResponse.getKey(), Label.Committed);
-            for(int i = my_id; i < my_id + write_quorum; i++) {
+            for(int i = my_id+1; i < my_id + write_quorum; i++) {
                 peers.get(i % peers.size()).send(new Write(msg.getKey(), s.toWrite, s.writeMaxVersion+1));
             }
             s.writeClient.send(new PutResponse(msg.getKey(), s.writeMaxVersion+1));
@@ -292,7 +292,7 @@ public class Node {
         if (!s.reading) {
             s.reading = true;
             s.readClient = c;
-            for(int i = my_id; i < my_id + read_quorum; i++) {
+            for(int i = my_id+1; i < my_id + read_quorum; i++) {
                 peers.get(i % peers.size()).send(new Read(msg.getKey()));
             }
             return  true;
@@ -314,7 +314,7 @@ public class Node {
         changeLabel(msg.getKey(), Label.Waiting);
         db.get(msg.getKey()).getState().toWrite = putRequest.getValue();
         db.get(msg.getKey()).getState().writeClient = c;
-        for(int i = my_id; i < my_id + write_quorum; i++) {
+        for(int i = my_id+1; i < my_id + write_quorum; i++) {
             peers.get(i % peers.size()).send(new ContactRequest(msg.getKey()));
         }
         return true;
