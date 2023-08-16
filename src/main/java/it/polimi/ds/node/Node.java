@@ -33,7 +33,7 @@ public class Node {
 
     HashMap<String, Entry> db = new HashMap<>();
 
-    Stack<Pair<Connection, PutRequest>> aborted = new Stack<>();
+    AbortedStack aborted = new AbortedStack();
 
     public void run() throws Exception {
 
