@@ -2,6 +2,8 @@ package it.polimi.ds.node;
 
 import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.Presentation;
+import it.polimi.ds.networking.messages.Read;
+import it.polimi.ds.networking.messages.ReadResponse;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.util.HashMap;
@@ -17,12 +19,14 @@ public class PeerConnector implements  Runnable{
     int myId;
 
     private int accepted_connections = 0;
+    Node node;
 
 
-    public PeerConnector(HashMap<Integer, Connection> peers, Topology topology, int id) {
+    public PeerConnector(HashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
             this.peers = peers;
             this.topology = topology;
             this.myId = id;
+            this.node = node;
         }
 
 
@@ -37,6 +41,10 @@ public class PeerConnector implements  Runnable{
                             Connection connection = new AddressConnection(address.getIp(), address.getPort(), logger);
                             accepted_connections++;
                             connection.send(new Presentation(myId));
+                            connection.bindToMessage(new MessageFilter ("test", Read.class), node::onRead);
+                            connection.bindToMessage(new MessageFilter ("test", ReadResponse.class), node::onReadResponse);
+
+
                             System.out.println(myId + " Connecting to " + i);
                             synchronized (peers) {
                                 peers.put(i, connection);

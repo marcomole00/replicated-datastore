@@ -59,6 +59,7 @@ public class Client {
 
     void get(String key, int node) throws IOException {
         Connection connection = openConnection(node);
+        connection.send(new Presentation(-1));
         connection.send(new GetRequest(key));
         connection.bindToMessage(new MessageFilter(key, GetResponse.class), this::logGetResponse);
     }
@@ -72,6 +73,7 @@ public class Client {
 
     void put(String key, String value, int node) throws IOException {
         Connection connection = openConnection(node);
+        connection.send(new Presentation(-1));
         connection.send(new PutRequest(key, value));
         connection.bindToMessage(new MessageFilter(key, PutResponse.class), this::logPutResponse);
     }

@@ -14,13 +14,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.io.File;
 import java.util.Scanner;
-import java.util.Stack;
+import java.util.logging.Level;
 
 import static java.lang.Thread.sleep;
 
 public class Node {
 
-   private  HashMap<Integer, Connection> peers = new HashMap<>();
+   private final  HashMap<Integer, Connection> peers = new HashMap<>();
    private ServerSocket serverSocket;
     int read_quorum;
     int write_quorum;
@@ -103,33 +103,58 @@ public class Node {
 
        serverSocket =  ipAutoDiscovery();
 
-
-        SocketAccepter socketAccepter = new SocketAccepter(serverSocket, peers, topology, my_id);
-        Thread accepterThread = new Thread(socketAccepter);
-        accepterThread.start();
-
-        PeerConnector peerConnector = new PeerConnector(peers, topology, my_id);
+        PeerConnector peerConnector = new PeerConnector(peers, topology, my_id, this);
         Thread connectorThread = new Thread(peerConnector);
         connectorThread.start();
 
-        accepterThread.join();
-        connectorThread.join();
 
+        while(true) {
+            try {
+                Socket socket = serverSocket.accept();
+                int id = topology.getId(socket.getInetAddress().getHostAddress());
+                if (id == -1) {
+                    logger.log(Level.WARNING ,"Received connection from unknown address " + socket.getInetAddress().getHostAddress());
+                    continue;
+                }
 
+                Connection connection = new SocketConnection(socket, logger);
 
+                connection.bindToMessage(new MessageFilter("", Presentation.class), this::onPresentation);
 
-        for (Connection p : peers.values()) {
-            p.bindToMessage(new MessageFilter("", Read.class), this::onRead);
-            p.bindToMessage(new MessageFilter("", Read.class), this::onReadResponse);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
-        while (true) {
-            Socket socket  = serverSocket.accept();
-            Connection connection = new SocketConnection(socket, logger);
+
+
+    }
+
+    boolean onPresentation(Connection connection, Message message) {
+
+        Presentation p = (Presentation) message;
+
+        if ( p.getId() < 0) {
+            connection.clearBindings("");
             connection.bindToMessage(new MessageFilter("test", GetRequest.class), this::onGetRequest);
             connection.bindToMessage(new MessageFilter("test", PutRequest.class), this::onPutRequest);
+            System.out.println("a client connected");
         }
+        else if (0 <= p.getId() && p.getId() < number_of_nodes) {
+            synchronized (peers) {
+                peers.put(p.getId(), connection);
+                System.out.println("Received connection from " + p.getId());
+                connection.clearBindings("");
+                connection.bindToMessage(new MessageFilter("test", Read.class), this::onRead);
+                connection.bindToMessage(new MessageFilter("test", ReadResponse.class), this::onReadResponse);
+
+            }
+            return true;
+        }
+        return false;
+
     }
+
 
 
     public ServerSocket ipAutoDiscovery() throws Exception {
@@ -287,6 +312,7 @@ public class Node {
 
     boolean onGetRequest(Connection c, Message msg) {
         //GetRequest getRequest = (GetRequest) msg;
+        System.out.println("Received get request for key " + msg.getKey());
         putIfNotPresent(msg.getKey());
         State s = db.get(msg.getKey()).getState();
         if (!s.reading) {
@@ -309,6 +335,7 @@ public class Node {
     }
 
     boolean onPutRequest(Connection c, Message msg) {
+        System.out.println("Received put request for key " + msg.getKey());
         PutRequest putRequest = (PutRequest) msg;
         putIfNotPresent(msg.getKey());
         changeLabel(msg.getKey(), Label.Waiting);
@@ -321,7 +348,16 @@ public class Node {
     }
 
     boolean onRead(Connection c, Message msg) {
-        c.send(new ReadResponse(msg.getKey(), db.get(msg.getKey()).getValue(), db.get(msg.getKey()).getVersion()));
+        System.out.println("Received read request for key " + msg.getKey());
+        Entry  entry = db.get(msg.getKey());
+        String value = null;
+        int version = 0;
+
+        if( entry != null ) {
+            value = entry.getValue();
+            version = entry.getVersion();
+        }
+        c.send(new ReadResponse(msg.getKey(), value, version));
         return true;
     }
 
