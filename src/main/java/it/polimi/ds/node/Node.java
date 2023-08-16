@@ -162,6 +162,12 @@ public class Node {
         return serverSocket;
     }
 
+    void putIfNotPresent(String key) {
+        if (!db.containsKey(key)) {
+            db.put(key, new Entry(null, 0, new State()));
+        }
+    }
+
     void changeLabel(String key, Label newLabel) {
         for (Connection c : peers.values()) {
             c.clearBindings(key);
@@ -195,6 +201,7 @@ public class Node {
     }
 
     boolean onContactRequest(Connection c, Message msg) {
+        putIfNotPresent(msg.getKey());
         int node = new ArrayList<>(peers.values()).indexOf(c);
         State s = db.get(msg.getKey()).getState();
         if(db.get(msg.getKey()).getState().label == Label.Waiting) {
@@ -246,6 +253,7 @@ public class Node {
 
     boolean onGetRequest(Connection c, Message msg) {
         GetRequest getRequest = (GetRequest) msg;
+        putIfNotPresent(msg.getKey());
         State s = db.get(msg.getKey()).getState();
         if (!s.reading) {
             s.reading = true;
@@ -266,10 +274,12 @@ public class Node {
         return true;
     }
 
-    boolean onPutRequest(Connection ignored, Message msg) {
+    boolean onPutRequest(Connection c, Message msg) {
         PutRequest putRequest = (PutRequest) msg;
+        putIfNotPresent(msg.getKey());
         changeLabel(msg.getKey(), Label.Waiting);
         db.get(msg.getKey()).getState().toWrite = putRequest.getValue();
+        db.get(msg.getKey()).getState().writeClient = c;
         for(int i = my_id; i < my_id + write_quorum; i++) {
             peers.get(i % peers.size()).send(new ContactRequest(msg.getKey()));
         }
