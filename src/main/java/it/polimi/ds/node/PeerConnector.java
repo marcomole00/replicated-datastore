@@ -1,9 +1,7 @@
 package it.polimi.ds.node;
 
 import it.polimi.ds.networking.*;
-import it.polimi.ds.networking.messages.Presentation;
-import it.polimi.ds.networking.messages.Read;
-import it.polimi.ds.networking.messages.ReadResponse;
+import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.util.HashMap;
@@ -43,6 +41,7 @@ public class PeerConnector implements  Runnable{
                             connection.send(new Presentation(myId));
                             connection.bindToMessage(new MessageFilter (Topic.any(), Read.class), node::onRead);
                             connection.bindToMessage(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);
+                            connection.bindToMessage(new MessageFilter (Topic.any(), ContactRequest.class), node::onContactRequest);
 
 
                             System.out.println(myId + " Connecting to " + i);

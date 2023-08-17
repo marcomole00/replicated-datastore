@@ -51,5 +51,9 @@ public class Topology {
         return s;
     }
 
+    public int size() {
+        return nodes.size();
+    }
+
 
 }

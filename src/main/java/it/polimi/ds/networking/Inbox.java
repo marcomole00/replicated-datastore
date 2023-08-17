@@ -64,6 +64,7 @@ public class Inbox {
     public void clearBindings(Topic topic) {
         synchronized (bindings) {
             bindings.keySet().stream().filter(e->topic.contains(e.getTopic())).toList().forEach(bindings.keySet()::remove);
+            logger.log(Level.INFO, "cLearing bindings for " + topic);
         }
     }
 

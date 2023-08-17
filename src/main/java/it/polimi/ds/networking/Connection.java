@@ -47,6 +47,7 @@ public abstract class Connection {
         try {
             synchronized (writer) {
                 writer.writeObject(message);
+                logger.log(Level.INFO, "Sent message: " + message);
             }
         } catch (IOException ignored) { /*ignored*/ }
     }

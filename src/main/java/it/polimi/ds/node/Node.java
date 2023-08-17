@@ -214,6 +214,8 @@ public class Node {
         for (Connection c : peers.values()) {
             c.clearBindings(Topic.fromString(key));
         }
+
+        logger.log(Level.INFO, "Changing state(" + key + ") from " +  db.get(key).getMetadata().state +  " to " + newState);
         db.get(key).getMetadata().state = newState;
         db.get(key).getMetadata().ackCounter = 0;
         db.get(key).getMetadata().writeMaxVersion = -1;
@@ -232,7 +234,7 @@ public class Node {
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), Write.class), this::onWrite);
                 } else if (newState == State.Waiting) {
-                    c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactRequest);
+                    c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack);
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse);
                 }
@@ -254,7 +256,7 @@ public class Node {
             if (node > my_id) {
                 changeState(msg.getKey(), State.Aborted);
                 for(int i = my_id+1; i < my_id + write_quorum; i++) {
-                    peers.get(i % peers.size()).send(new Abort(msg.getKey()));
+                    peers.get(i % topology.size()).send(new Abort(msg.getKey()));
                 }
                 aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
                 changeState(msg.getKey(), State.Ready);
@@ -295,7 +297,7 @@ public class Node {
             db.get(msg.getKey()).setValue(write.getValue());
             db.get(msg.getKey()).setVersion(write.getVersion());
             for(int i = my_id+1; i < my_id + write_quorum; i++) {
-                peers.get(i % peers.size()).send(write);
+                peers.get(i % topology.size()).send(write);
             }
             metadata.writeClient.send(putResponse);
             metadata.writeClient.stop();
@@ -311,9 +313,11 @@ public class Node {
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (!metadata.reading) {
             metadata.reading = true;
+            metadata.readMaxVersion = db.get(msg.getKey()).getVersion();
+            metadata.latestValue = db.get(msg.getKey()).getValue();
             metadata.readClient = c;
             for(int i = my_id+1; i < my_id + read_quorum; i++) {
-                peers.get(i % peers.size()).send(new Read(msg.getKey()));
+                peers.get(i % topology.size()).send(new Read(msg.getKey()));
             }
             return  true;
         }
@@ -341,7 +345,7 @@ public class Node {
         metadata.toWrite = putRequest.getValue();
         metadata.writeClient = c;
         for(int i = my_id+1; i < my_id + write_quorum; i++) {
-            peers.get(i % peers.size()).send(new ContactRequest(msg.getKey()));
+            peers.get(i % topology.size()).send(new ContactRequest(msg.getKey()));
         }
         return true;
     }
