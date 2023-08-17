@@ -4,10 +4,12 @@ public class Nack extends Message {
 
     private  final int nodeID;
 
-    public Nack(String key, int nodeID) {
+    private final int contactId;
+
+    public Nack(String key, int nodeID, int contactId) {
         super(key);
         this.nodeID = nodeID;
-
+        this.contactId = contactId;
     }
 
 
@@ -16,4 +18,7 @@ public class Nack extends Message {
     }
 
 
+    public int getContactId() {
+        return contactId;
+    }
 }

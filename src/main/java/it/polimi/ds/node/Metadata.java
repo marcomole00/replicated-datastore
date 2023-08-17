@@ -12,6 +12,8 @@ public class Metadata {
 
     public Integer coordinator;
 
+    public Integer contactId;
+
     public Connection writeClient;
 
     public boolean reading = false;

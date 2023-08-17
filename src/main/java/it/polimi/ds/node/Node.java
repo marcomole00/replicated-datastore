@@ -18,8 +18,10 @@ import static java.lang.Thread.sleep;
 
 public class Node {
 
-   private final  HashMap<Integer, Connection> peers = new HashMap<>();
-   private ServerSocket serverSocket;
+    private final  HashMap<Integer, Connection> peers = new HashMap<>();
+    private ServerSocket serverSocket;
+
+    SafeCounter contactCounter = new SafeCounter();
     int read_quorum;
     int write_quorum;
     int my_id = -1;
@@ -229,6 +231,7 @@ public class Node {
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
                     db.get(key).getMetadata().toWrite = null;
                     db.get(key).getMetadata().coordinator = null;
+                    db.get(key).getMetadata().contactId = null;
                 } else if (newState == State.Ready) {
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort);
                     c.bindToMessage(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
@@ -250,6 +253,7 @@ public class Node {
 
     boolean onContactRequest(Connection c, Message msg) {
         putIfNotPresent(msg.getKey());
+        ContactRequest contactRequest = (ContactRequest) msg;
         int node = new ArrayList<>(peers.values()).indexOf(c);
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if(db.get(msg.getKey()).getMetadata().state == State.Waiting) {
@@ -261,7 +265,8 @@ public class Node {
                 aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
                 changeState(msg.getKey(), State.Ready);
                 metadata.coordinator = node;
-                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
+                metadata.contactId = contactRequest.getContactId();
+                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
             }
             else {
                 return false;
@@ -269,7 +274,7 @@ public class Node {
         }
         else if (db.get(msg.getKey()).getMetadata().state == State.Ready){
             if (node > metadata.coordinator) {
-                c.send(new Nack(msg.getKey(), metadata.coordinator));
+                c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
             }
             else {
                 return false;
@@ -278,7 +283,8 @@ public class Node {
         else if (db.get(msg.getKey()).getMetadata().state == State.Idle){
             changeState(msg.getKey(), State.Ready);
             metadata.coordinator = node;
-            c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion()));
+            metadata.contactId = contactRequest.getContactId();
+            c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
         }
         return true;
     }
@@ -287,6 +293,8 @@ public class Node {
         //TODO: synchronize all callbacks on the key?
         ContactResponse contactResponse = (ContactResponse) msg;
         Metadata metadata = db.get(msg.getKey()).getMetadata();
+        if (contactResponse.getContactId() != metadata.contactId)
+            return true; // drop message
         metadata.ackCounter++;
         if (contactResponse.getVersion() > metadata.writeMaxVersion)
             metadata.writeMaxVersion = contactResponse.getVersion();
@@ -328,7 +336,9 @@ public class Node {
 
     boolean onNack(Connection ignored, Message msg) {
         Nack nack = (Nack) msg;
-        peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey()));
+        if (nack.getContactId() != db.get(msg.getKey()).getMetadata().contactId)
+            return true; // drop message
+        peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), nack.getContactId()));
         return true;
     }
 
@@ -344,8 +354,9 @@ public class Node {
         changeState(msg.getKey(), State.Waiting);
         metadata.toWrite = putRequest.getValue();
         metadata.writeClient = c;
+        metadata.contactId = contactCounter.getAndIncrement();
         for(int i = my_id+1; i < my_id + write_quorum; i++) {
-            peers.get(i % topology.size()).send(new ContactRequest(msg.getKey()));
+            peers.get(i % topology.size()).send(new ContactRequest(msg.getKey(), metadata.contactId));
         }
         return true;
     }
