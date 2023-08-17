@@ -3,9 +3,9 @@ package it.polimi.ds.node;
 import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
+import it.polimi.ds.utils.Topology;
 
 import java.util.HashMap;
-import java.util.logging.Level;
 
 public class PeerConnector implements  Runnable{
 

@@ -1,4 +1,6 @@
-package it.polimi.ds.networking;
+package it.polimi.ds.utils;
+
+import it.polimi.ds.networking.Address;
 
 import java.util.ArrayList;
 import java.util.List;

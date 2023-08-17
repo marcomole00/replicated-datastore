@@ -3,6 +3,7 @@ package it.polimi.ds.client;
 import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
+import it.polimi.ds.utils.Topology;
 
 import java.io.BufferedReader;
 import java.io.File;
