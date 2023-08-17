@@ -24,7 +24,15 @@ public class Topic {
         return new Topic(TopicType.STRING, string);
      }
 
-     public boolean match(String string) {
+    public boolean isString() {
+        return type == TopicType.STRING;
+    }
+
+    public String getString() {
+        return string;
+    }
+
+    public boolean match(String string) {
          if (type == TopicType.ANY)
              return true;
          return this.string.equals(string);

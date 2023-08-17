@@ -14,7 +14,7 @@ import java.util.logging.Level;
 
 public class Node {
 
-    private final  HashMap<Integer, Connection> peers = new HashMap<>();
+    private final  HashMap<Integer, KeySafeConnection> peers = new HashMap<>();
 
     SafeCounter contactCounter = new SafeCounter();
 
@@ -45,7 +45,7 @@ public class Node {
                     logger.log(Level.WARNING ,"Received connection from unknown address " + socket.getInetAddress().getHostAddress());
                     continue;
                 }
-                Connection connection = new SocketConnection(socket, logger);
+                KeySafeConnection connection = KeySafeConnection.fromSocket(socket, logger, db);
                 connection.bindToMessage(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -54,7 +54,6 @@ public class Node {
     }
 
     boolean onPresentation(Connection connection, Message message) {
-
         Presentation p = (Presentation) message;
 
         if ( p.getId() < 0) {
@@ -65,7 +64,7 @@ public class Node {
         }
         else if (0 <= p.getId() && p.getId() < config.getNumberOfNodes()) {
             synchronized (peers) {
-                peers.put(p.getId(), connection);
+                peers.put(p.getId(), (KeySafeConnection) connection);
                 System.out.println("Received connection from " + p.getId());
                 connection.clearBindings(Topic.any());
                 connection.bindToMessage(new MessageFilter(Topic.any(), Read.class), this::onRead);
@@ -110,7 +109,6 @@ public class Node {
     }
 
     boolean onAbort(Connection c, Message msg) {
-        //TODO: handle late abort
         changeState(msg.getKey(), State.Idle);
         return true;
     }
@@ -154,7 +152,6 @@ public class Node {
     }
 
     boolean onContactResponse(Connection ignored, Message msg) {
-        //TODO: synchronize all callbacks on the key?
         ContactResponse contactResponse = (ContactResponse) msg;
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (contactResponse.getContactId() != metadata.contactId)
@@ -262,6 +259,10 @@ public class Node {
         db.get(write.getKey()).setVersion(write.getVersion());
         changeState(write.getKey(), State.Idle);
         return true;
+    }
+
+    public DataBase getDb() {
+        return db;
     }
 }
 

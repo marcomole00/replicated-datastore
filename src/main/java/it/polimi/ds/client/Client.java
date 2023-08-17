@@ -7,10 +7,8 @@ import it.polimi.ds.utils.SafeLogger;
 import it.polimi.ds.utils.Topology;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Scanner;
 import java.util.logging.Level;
 
 public class Client {
@@ -51,7 +49,7 @@ public class Client {
     }
 
     Connection openConnection(int node) throws IOException {
-        return new AddressConnection(topology.getIp(node), topology.getPort(node), logger);
+        return Connection.fromAddress(new Address(topology.getIp(node), topology.getPort(node)), logger);
     }
 
     void get(String key, int node) throws IOException {

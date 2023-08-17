@@ -1,7 +1,7 @@
 package it.polimi.ds.node;
 
 public class SafeCounter {
-    int value;
+    private int value;
     public SafeCounter() {
         value = 0;
     }

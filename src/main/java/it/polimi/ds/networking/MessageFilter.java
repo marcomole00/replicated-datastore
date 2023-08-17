@@ -17,7 +17,7 @@ public class MessageFilter extends MutablePair<Topic, List<Class<?>>> {
         super(topic, classes);
     }
 
-    Topic getTopic() {return getLeft();}
+    public Topic getTopic() {return getLeft();}
 
     List<Class<?>> getClasses() {
         return getRight();

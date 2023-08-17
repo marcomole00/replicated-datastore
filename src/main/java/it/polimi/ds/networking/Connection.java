@@ -1,6 +1,7 @@
 package it.polimi.ds.networking;
 
 import it.polimi.ds.networking.messages.Message;
+import it.polimi.ds.node.DataBase;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.io.IOException;
@@ -11,7 +12,7 @@ import java.net.Socket;
 import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
-public abstract class Connection {
+public class Connection {
     private final Socket socket;
     protected final ObjectInputStream reader;
     protected final ObjectOutputStream writer;
@@ -29,6 +30,14 @@ public abstract class Connection {
         this.inbox = new Inbox(logger, this);
         listenThread = new Thread(this::listenMessages);
         listenThread.start();
+    }
+
+    public static Connection fromSocket(Socket socket, SafeLogger logger) throws IOException {
+        return new Connection(socket, logger);
+    }
+
+    public static Connection fromAddress(Address address, SafeLogger logger) throws IOException {
+        return new Connection(new Socket(address.getIp(), address.getPort()), logger);
     }
 
     public void clearBindings(Topic topic) {
@@ -60,7 +69,7 @@ public abstract class Connection {
                 Message msg = (Message) reader.readObject();
                 logger.log(Level.INFO, "Received message: " + msg);
                 logger.log(Level.INFO, "No binding found");
-                inbox.add(msg); //TODO: fifo channels
+                inbox.add(msg);
             } catch (IOException e) {
                 toLog = "IOException when reading message: " + e.getMessage();
                 logger.log(Level.SEVERE, toLog);
