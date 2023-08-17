@@ -52,29 +52,6 @@ public abstract class Connection {
         } catch (IOException ignored) { /*ignored*/ }
     }
 
-    /*
-    /**
-     * waits for a message that matches the filter
-     * @param filter a list of class that compose the filter
-     * @return the first received message or in queue to be processed that matches the filter
-     */
-    /*public Message waitMessage(MessageFilter filter) {
-        Message m = inbox.pollFirstMatch(filter); // eventual message that was received before the call of waitMessage
-        while (m == null) {  // if no compatible found wait for one
-
-                try {
-                    synchronized (this) {
-                        wait();
-                        m = inbox.pollFirstMatch(filter);
-                    }
-                } catch (InterruptedException e) {
-                    logger.log(Level.WARNING, "Interrupted", e);
-                    Thread.currentThread().interrupt();
-                }
-            }
-        return m;
-    }*/
-
     void listenMessages() {
         String toLog = "Listening for new messages from: " + socket.getInetAddress();
         logger.log(Level.INFO, toLog);
@@ -84,9 +61,6 @@ public abstract class Connection {
                 logger.log(Level.INFO, "Received message: " + msg);
                 logger.log(Level.INFO, "No binding found");
                 inbox.add(msg); //TODO: fifo channels
-                /*synchronized (this) {
-                    notifyAll();
-                }*/
             } catch (IOException e) {
                 toLog = "IOException when reading message: " + e.getMessage();
                 logger.log(Level.SEVERE, toLog);
@@ -97,6 +71,7 @@ public abstract class Connection {
     /**
      * checks if the connection is running by checking socket state
      * @return if the connection is still listening for messages
+     * socket method is already synchronized properly
      */
     boolean isRunning() {
         return !socket.isClosed();
@@ -104,6 +79,7 @@ public abstract class Connection {
 
     /**
      * stops the listen message loop by closing the socket that will raise an exception on readObject()
+     * socket method is already synchronized properly
      */
     public void stop() {
         try {
@@ -124,5 +100,4 @@ public abstract class Connection {
             Thread.currentThread().interrupt();
         }
     }
-
 }

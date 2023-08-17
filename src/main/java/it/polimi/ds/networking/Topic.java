@@ -8,20 +8,20 @@ enum TopicType {
 }
 
 public class Topic {
-    TopicType type;
-    String string;
+    final TopicType type;
+    final String string;
+
+    private Topic(TopicType type, String string) {
+        this.type = type;
+        this.string = string;
+    }
 
      public static Topic any() {
-         Topic t = new Topic();
-         t.type = TopicType.ANY;
-         return t;
+         return new Topic(TopicType.ANY, null);
      }
 
      public static Topic fromString(String string) {
-         Topic t = new Topic();
-         t.type = TopicType.STRING;
-         t.string = string;
-         return t;
+        return new Topic(TopicType.STRING, string);
      }
 
      public boolean match(String string) {

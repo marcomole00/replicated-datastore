@@ -21,24 +21,6 @@ public class Inbox {
         this.connection = connection;
     }
 
-
-    /**
-     * remove the first matching message from messagesToProcess queue and returns it
-     * @param filter the filter the message must match
-     * @return the message removed from the queue or null if none is available
-     */
-    public Message pollFirstMatch(MessageFilter filter) {
-        synchronized (queue) {
-            for (Message m : queue) {
-                if (matchFilter(m, filter)) {
-                    queue.remove(m);
-                    return m;
-                }
-            }
-            return null;
-        }
-    }
-
     void updateQueue() {
         synchronized (queue) {
             int i = 0;
@@ -71,26 +53,12 @@ public class Inbox {
     Boolean matchBindings(Message m) {
         synchronized (bindings) {
             for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.entrySet()) {
-                if(matchFilter(m, b.getKey())) {
+                if(b.getKey().match(m)) {
                     return b.getValue().test(connection, m);
                 }
             }
             return false;
         }
-    }
-
-    /**
-     * checks if the message belongs to one of the classes in the filter
-     * @param message the message to be checked
-     * @param filter a list of class that the filter will match
-     * @return if the message matches
-     */
-    static boolean matchFilter(Message message, MessageFilter filter) {
-        for (Class<?> c: filter.getClasses()) {
-            if(c.isInstance(message))
-                return filter.getTopic().match(message.getKey());
-        }
-        return false;
     }
 
     public void add(Message message) {
