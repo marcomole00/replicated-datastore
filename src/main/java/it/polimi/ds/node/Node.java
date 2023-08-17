@@ -14,7 +14,6 @@ import java.util.*;
 import java.io.File;
 import java.util.logging.Level;
 
-import static java.lang.Thread.sleep;
 
 public class Node {
 
@@ -353,6 +352,7 @@ public class Node {
         }
         changeState(msg.getKey(), State.Waiting);
         metadata.toWrite = putRequest.getValue();
+        metadata.writeMaxVersion = db.get(msg.getKey()).getVersion();
         metadata.writeClient = c;
         metadata.contactId = contactCounter.getAndIncrement();
         for(int i = my_id+1; i < my_id + write_quorum; i++) {
@@ -392,7 +392,7 @@ public class Node {
     }
 
     boolean onWrite(Connection ignored, Message msg) {
-        Write write = (Write) msg; 
+        Write write = (Write) msg;
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
         changeState(write.getKey(), State.Idle);
