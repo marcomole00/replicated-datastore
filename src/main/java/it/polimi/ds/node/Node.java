@@ -114,7 +114,6 @@ public class Node {
     }
 
     boolean onContactRequest(Connection c, Message msg) {
-        db.putIfNotPresent(msg.getKey());
         ContactRequest contactRequest = (ContactRequest) msg;
         int node = new ArrayList<>(peers.values()).indexOf(c);
         Metadata metadata = db.get(msg.getKey()).getMetadata();
@@ -178,7 +177,6 @@ public class Node {
     boolean onGetRequest(Connection c, Message msg) {
         //GetRequest getRequest = (GetRequest) msg;
         System.out.println("Received get request for key " + msg.getKey());
-        db.putIfNotPresent(msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (!metadata.reading) {
             metadata.reading = true;
@@ -206,7 +204,6 @@ public class Node {
     boolean onPutRequest(Connection c, Message msg) {
         System.out.println("Received put request for key " + msg.getKey());
         PutRequest putRequest = (PutRequest) msg;
-        db.putIfNotPresent(msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (metadata.state != State.Idle) {
             aborted.push(new ImmutablePair<>(c, putRequest));
@@ -224,7 +221,6 @@ public class Node {
     }
 
     boolean onRead(Connection c, Message msg) {
-        db.putIfNotPresent(msg.getKey());
         System.out.println("Received read request for key " + msg.getKey());
         Entry  entry = db.get(msg.getKey());
         String value = entry.getValue();
