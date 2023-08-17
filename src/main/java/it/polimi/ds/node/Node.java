@@ -347,15 +347,11 @@ public class Node {
     }
 
     boolean onRead(Connection c, Message msg) {
+        putIfNotPresent(msg.getKey());
         System.out.println("Received read request for key " + msg.getKey());
         Entry  entry = db.get(msg.getKey());
-        String value = null;
-        int version = 0;
-
-        if( entry != null ) {
-            value = entry.getValue();
-            version = entry.getVersion();
-        }
+        String value = entry.getValue();
+        int version = entry.getVersion();
         c.send(new ReadResponse(msg.getKey(), value, version));
         return true;
     }
