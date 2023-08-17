@@ -37,4 +37,12 @@ public class Topic {
              return false;
          return string.equals(t.string);
      }
+
+    @Override
+    public String toString() {
+        return "Topic{" +
+                "type=" + type +
+                ", string='" + string + '\'' +
+                '}';
+    }
 }
