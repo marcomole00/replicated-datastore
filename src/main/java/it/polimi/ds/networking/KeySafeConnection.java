@@ -26,9 +26,8 @@ public class KeySafeConnection extends Connection{
         return new KeySafeConnection(new Socket(address.getIp(), address.getPort()), logger, db);
     }
 
-    @Override
-    public void bindToMessage(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        BiPredicate<Connection, Message> newAction = (c,m)-> {
+    BiPredicate<Connection, Message> keySafeAction(BiPredicate<Connection, Message> action) {
+        return (c,m)-> {
             if (m instanceof Presentation) {
                 return action.test(c, m);
             }
@@ -39,6 +38,15 @@ public class KeySafeConnection extends Connection{
                 }
             }
         };
-        super.bindToMessage(filter, newAction);
+    }
+
+    @Override
+    public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
+        super.bindCheckPrevious(filter, keySafeAction(action));
+    }
+
+    @Override
+    public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
+        super.bind(filter, keySafeAction(action));
     }
 }

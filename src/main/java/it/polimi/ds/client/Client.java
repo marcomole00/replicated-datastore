@@ -59,7 +59,7 @@ public class Client {
         Connection connection = openConnection(node);
         connection.send(new Presentation(-1));
         connection.send(new GetRequest(key));
-        connection.bindToMessage(new MessageFilter(Topic.fromString(key), GetResponse.class), this::logGetResponse);
+        connection.bindCheckPrevious(new MessageFilter(Topic.fromString(key), GetResponse.class), this::logGetResponse);
     }
 
     boolean logGetResponse(Connection c, Message msg) {
@@ -73,7 +73,7 @@ public class Client {
         Connection connection = openConnection(node);
         connection.send(new Presentation(-1));
         connection.send(new PutRequest(key, value));
-        connection.bindToMessage(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
+        connection.bindCheckPrevious(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
     }
 
     boolean logPutResponse(Connection c, Message msg) {

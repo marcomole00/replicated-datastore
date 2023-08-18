@@ -37,9 +37,9 @@ public class PeerConnector implements  Runnable{
                             KeySafeConnection connection = KeySafeConnection.fromAddress(address, logger, node.getDb());
                             accepted_connections++;
                             connection.send(new Presentation(myId));
-                            connection.bindToMessage(new MessageFilter (Topic.any(), Read.class), node::onRead);
-                            connection.bindToMessage(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);
-                            connection.bindToMessage(new MessageFilter (Topic.any(), ContactRequest.class), node::onContactRequest);
+                            connection.bindCheckPrevious(new MessageFilter (Topic.any(), Read.class), node::onRead);
+                            connection.bindCheckPrevious(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);
+                            connection.bindCheckPrevious(new MessageFilter (Topic.any(), ContactRequest.class), node::onContactRequest);
 
 
                             System.out.println(myId + " Connecting to " + i);

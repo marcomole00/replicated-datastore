@@ -23,24 +23,41 @@ public class Inbox {
 
     void updateQueue() {
         synchronized (queue) {
-            int i = 0;
-            while (i < queue.size()){
-                Message m = queue.get(i);
-                queue.remove(i);
-                if (!matchBindings(m)) {
-                    queue.add(i, m);
-                    i++;
-                }
+            synchronized (bindings) {
+                Message processed;
+                do {
+                    processed = null;
+                    int i = 0;
+                    while (i < queue.size()) {
+                        Message m = queue.get(i);
+                        queue.remove(i);
+                        if (matchBindings(m)) {
+                            processed = m;
+                            break;
+                        }
+                        else {
+                            queue.add(i, m);
+                            i++;
+                        }
+                    }
+                } while (processed != null);
             }
         }
     }
 
-    public void bindToMessage(MessageFilter filter, BiPredicate<Connection, Message> action) {
+    public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
         synchronized (bindings) {
             logger.log(Level.INFO,"Binding " + filter + " to " + action);
             bindings.put(filter, action);
         }
         updateQueue();
+    }
+
+    public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
+        synchronized (bindings) {
+            logger.log(Level.INFO,"Binding " + filter + " to " + action);
+            bindings.put(filter, action);
+        }
     }
 
     public void clearBindings(Topic topic) {

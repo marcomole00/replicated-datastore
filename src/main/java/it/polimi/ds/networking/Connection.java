@@ -1,7 +1,6 @@
 package it.polimi.ds.networking;
 
 import it.polimi.ds.networking.messages.Message;
-import it.polimi.ds.node.DataBase;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.io.IOException;
@@ -44,8 +43,12 @@ public class Connection {
         inbox.clearBindings(topic);
     }
 
-    public void bindToMessage(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        inbox.bindToMessage(filter, action);
+    public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
+        inbox.bindCheckPrevious(filter, action);
+    }
+
+    public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
+        inbox.bind(filter, action);
     }
 
     /**
