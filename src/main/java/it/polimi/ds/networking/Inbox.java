@@ -50,8 +50,10 @@ public class Inbox {
     }
 
     public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        bind(filter, action);
-        updateQueue(filter.getTopic());
+        synchronized (locks.get(filter.getTopic())) {
+            bind(filter, action);
+            updateQueue(filter.getTopic());
+        }
     }
 
     public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {

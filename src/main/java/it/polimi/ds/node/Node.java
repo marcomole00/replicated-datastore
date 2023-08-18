@@ -10,6 +10,7 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.Socket;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.logging.Level;
 
 
@@ -52,7 +53,7 @@ public class Node {
                     continue;
                 }
                 Connection connection = Connection.fromSocket(socket, logger, locks);
-                connection.bindCheckPrevious(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
+                connection.bind(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -68,8 +69,8 @@ public class Node {
 
         if ( p.getId() < 0) {
             connection.clearBindings(Topic.any());
-            connection.bindCheckPrevious(new MessageFilter(Topic.any(), GetRequest.class), this::onGetRequest);
-            connection.bindCheckPrevious(new MessageFilter(Topic.any(), PutRequest.class), this::onPutRequest);
+            connection.bind(new MessageFilter(Topic.any(), GetRequest.class), this::onGetRequest);
+            connection.bind(new MessageFilter(Topic.any(), PutRequest.class), this::onPutRequest);
             System.out.println("a client connected");
         }
         else if (0 <= p.getId() && p.getId() < config.getNumberOfNodes()) {
@@ -77,9 +78,9 @@ public class Node {
                 peers.put(p.getId(), connection);
                 System.out.println("Received connection from " + p.getId());
                 connection.clearBindings(Topic.any());
-                connection.bindCheckPrevious(new MessageFilter(Topic.any(), Read.class), this::onRead);
-                connection.bindCheckPrevious(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
-                connection.bindCheckPrevious(new MessageFilter(Topic.any(), ContactRequest.class), this::onContactRequest);
+                connection.bind(new MessageFilter(Topic.any(), Read.class), this::onRead);
+                connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
+                connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), this::onContactRequest);
             }
         }
         return true;
@@ -89,7 +90,6 @@ public class Node {
         for (Connection c : peers.values()) {
             c.clearBindings(Topic.fromString(key));
         }
-
         logger.log(Level.INFO, "Changing state(" + key + ") from " +  db.get(key).getMetadata().state +  " to " + newState);
         db.get(key).getMetadata().state = newState;
         db.get(key).getMetadata().ackCounter = 0;
@@ -100,19 +100,20 @@ public class Node {
         }
         else {
             for (Connection c : peers.values()) {
+                int node = new ArrayList<>(peers.values()).indexOf(c);
                 if (newState == State.Idle) {
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
+                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest, node != serverSocket.myId);
                     db.get(key).getMetadata().toWrite = null;
                     db.get(key).getMetadata().coordinator = null;
                     db.get(key).getMetadata().contactId = null;
                 } else if (newState == State.Ready) {
-                    c.bind(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort);
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
-                    c.bind(new MessageFilter(Topic.fromString(key), Write.class), this::onWrite);
+                    c.bind(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort, node != serverSocket.myId);
+                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest, node != serverSocket.myId);
+                    c.bind(new MessageFilter(Topic.fromString(key), Write.class), this::onWrite, node != serverSocket.myId);
                 } else if (newState == State.Waiting) {
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest);
-                    c.bind(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack);
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse);
+                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest, node != serverSocket.myId);
+                    c.bind(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack, node != serverSocket.myId);
+                    c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse, node != serverSocket.myId);
                 }
             }
         }

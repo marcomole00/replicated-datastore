@@ -1,5 +1,6 @@
 package it.polimi.ds.networking;
 
+import it.polimi.ds.networking.messages.ContactRequest;
 import it.polimi.ds.networking.messages.Message;
 import it.polimi.ds.utils.SafeLogger;
 
@@ -8,6 +9,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 
+import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
@@ -47,12 +49,17 @@ public class Connection {
         inbox.clearBindings(topic);
     }
 
-    public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        inbox.bindCheckPrevious(filter, action);
+    public void bind(MessageFilter filter, BiPredicate<Connection, Message> action, boolean checkPrevious) {
+        if(checkPrevious) {
+            inbox.bindCheckPrevious(filter, action);
+        }
+        else {
+            inbox.bind(filter, action);
+        }
     }
 
     public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        inbox.bind(filter, action);
+        bind(filter, action, true);
     }
 
     /**

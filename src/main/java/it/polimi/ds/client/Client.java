@@ -59,7 +59,7 @@ public class Client {
         Connection connection = openConnection(node);
         connection.send(new Presentation(-1));
         connection.send(new GetRequest(key));
-        connection.bindCheckPrevious(new MessageFilter(Topic.fromString(key), GetResponse.class), this::logGetResponse);
+        connection.bind(new MessageFilter(Topic.fromString(key), GetResponse.class), this::logGetResponse);
     }
 
     boolean logGetResponse(Connection c, Message msg) {
@@ -73,7 +73,7 @@ public class Client {
         Connection connection = openConnection(node);
         connection.send(new Presentation(-1));
         connection.send(new PutRequest(key, value));
-        connection.bindCheckPrevious(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
+        connection.bind(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
     }
 
     boolean logPutResponse(Connection c, Message msg) {
@@ -84,7 +84,7 @@ public class Client {
     }
 
     void test1() {
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 500; i++) {
             try {
                 put("key", "value" + i, (i+1) % topology.size());
                 Thread.sleep(20);
