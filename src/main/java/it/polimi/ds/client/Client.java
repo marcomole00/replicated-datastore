@@ -43,6 +43,9 @@ public class Client {
             logger.log(Level.INFO, "Putting into key " + pieces[1] + " the value " + pieces[2]);
             put(pieces[1], pieces[2], Integer.parseInt(pieces[4]));
         }
+        else if (cmd.matches("test1")) {
+            test1();
+        }
         else {
             logger.log(Level.WARNING, "Unknown command or wrong syntax, no action taken");
         }
@@ -78,5 +81,18 @@ public class Client {
         logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
         c.stop();
         return true;
+    }
+
+    void test1() {
+        for (int i = 0; i < 500; i++) {
+            try {
+                put("key", "value" + i, (i+1) % topology.size());
+                Thread.sleep(20);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 }

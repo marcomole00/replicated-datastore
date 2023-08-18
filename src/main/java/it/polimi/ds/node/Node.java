@@ -3,6 +3,7 @@ package it.polimi.ds.node;
 import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.Config;
+import it.polimi.ds.utils.OperationLogger;
 import it.polimi.ds.utils.SafeLogger;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -20,6 +21,8 @@ public class Node {
 
     SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
 
+    OperationLogger operationLogger;
+
     Config config;
 
     AutoDiscoverSocket serverSocket;
@@ -33,6 +36,7 @@ public class Node {
         //start the server socket
         config = new Config();
         serverSocket = new AutoDiscoverSocket(config);
+        operationLogger = new OperationLogger(serverSocket.getMyId());
         PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this);
         Thread connectorThread = new Thread(peerConnector);
         connectorThread.start();
@@ -170,6 +174,7 @@ public class Node {
             metadata.writeClient.send(putResponse);
             metadata.writeClient.stop();
             changeState(contactResponse.getKey(), State.Idle);
+            operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         }
         return true;
     }
@@ -254,6 +259,7 @@ public class Node {
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
         changeState(write.getKey(), State.Idle);
+        operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         return true;
     }
 
