@@ -10,7 +10,7 @@ import java.util.HashMap;
 public class PeerConnector implements  Runnable{
 
 
-    private final HashMap<Integer, KeySafeConnection> peers;
+    private final HashMap<Integer, Connection> peers;
     private final Topology topology;
 
     private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
@@ -19,7 +19,7 @@ public class PeerConnector implements  Runnable{
     private int accepted_connections = 0;
     Node node;
 
-    public PeerConnector(HashMap<Integer, KeySafeConnection> peers, Topology topology, int id, Node node) {
+    public PeerConnector(HashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
             this.peers = peers;
             this.topology = topology;
             this.myId = id;
@@ -34,7 +34,7 @@ public class PeerConnector implements  Runnable{
                     for (int i = myId+1; i < topology.getNodes().size(); i++) {
                         if (!peers.containsKey(i)) {
                             Address address = topology.getNodes().get(i);
-                            KeySafeConnection connection = KeySafeConnection.fromAddress(address, logger, node.getDb());
+                            Connection connection = Connection.fromAddress(address, logger, node.getLocks());
                             accepted_connections++;
                             connection.send(new Presentation(myId));
                             connection.bindCheckPrevious(new MessageFilter (Topic.any(), Read.class), node::onRead);

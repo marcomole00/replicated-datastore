@@ -1,6 +1,7 @@
 package it.polimi.ds.networking;
 
 import it.polimi.ds.networking.messages.Message;
+import it.polimi.ds.networking.messages.Presentation;
 import it.polimi.ds.utils.SafeLogger;
 
 import java.util.*;
@@ -10,20 +11,23 @@ import java.util.logging.Level;
 public class Inbox {
     private final List<Message> queue = new LinkedList<>();
 
-    private final Map<MessageFilter, BiPredicate<Connection, Message>> bindings = new HashMap<>();
+    private final BindingSet bindings = new BindingSet();
 
     private final SafeLogger logger;
 
     private final Connection connection;
 
-    public  Inbox(SafeLogger logger, Connection connection) {
+    private final LockSet locks;
+
+    public  Inbox(SafeLogger logger, Connection connection, LockSet locks) {
         this.logger = logger;
         this.connection = connection;
+        this.locks = locks;
     }
 
-    void updateQueue() {
+    void updateQueue(Topic topic) {
         synchronized (queue) {
-            synchronized (bindings) {
+            synchronized (locks.get(topic)) {
                 Message processed;
                 do {
                     processed = null;
@@ -31,7 +35,7 @@ public class Inbox {
                     while (i < queue.size()) {
                         Message m = queue.get(i);
                         queue.remove(i);
-                        if (matchBindings(m)) {
+                        if (matchBindings(m, topic)) {
                             processed = m;
                             break;
                         }
@@ -46,31 +50,28 @@ public class Inbox {
     }
 
     public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        synchronized (bindings) {
-            logger.log(Level.INFO,"Binding " + filter + " to " + action);
-            bindings.put(filter, action);
-        }
-        updateQueue();
+        bind(filter, action);
+        updateQueue(filter.getTopic());
     }
 
     public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        synchronized (bindings) {
+        synchronized (locks.get(filter.getTopic())) {
             logger.log(Level.INFO,"Binding " + filter + " to " + action);
-            bindings.put(filter, action);
+            bindings.insert(filter, keySafeAction(action));
         }
     }
 
     public void clearBindings(Topic topic) {
-        synchronized (bindings) {
-            bindings.keySet().stream().filter(e->topic.contains(e.getTopic())).toList().forEach(bindings.keySet()::remove);
+        synchronized (locks.get(topic)) {
+            bindings.clear(topic);
             logger.log(Level.INFO, "cLearing bindings for " + topic);
         }
     }
 
-    Boolean matchBindings(Message m) {
-        synchronized (bindings) {
-            for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.entrySet()) {
-                if(b.getKey().match(m)) {
+    Boolean matchBindings(Message m, Topic topic) {
+        synchronized (locks.get(topic)) {
+            for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.getMatchList(topic)) { // always match messages also against topic "any"
+                if(b.getKey().match(m)) {  // getKey extracts the MessageFilter
                     return b.getValue().test(connection, m);
                 }
             }
@@ -78,10 +79,23 @@ public class Inbox {
         }
     }
 
+    BiPredicate<Connection, Message> keySafeAction(BiPredicate<Connection, Message> action) {
+        return (c,m)-> {
+            if (m instanceof Presentation) {
+                return action.test(c, m);
+            }
+            else {
+                synchronized (locks.get(m.getKey())) {
+                    return action.test(c, m);
+                }
+            }
+        };
+    }
+
     public void add(Message message) {
         synchronized (queue) {
-            queue.add(message);
-            updateQueue();
+            queue.add(message); //TODO: presentation key
+            updateQueue(Topic.fromString(message.getKey()));
         }
     }
 }

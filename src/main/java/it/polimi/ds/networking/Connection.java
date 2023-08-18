@@ -21,22 +21,26 @@ public class Connection {
 
     private final Inbox inbox;
 
-    protected Connection(Socket socket, SafeLogger logger) throws IOException {
+    protected Connection(Socket socket, SafeLogger logger, LockSet locks) throws IOException {
         this.socket = socket;
         writer = new ObjectOutputStream(socket.getOutputStream());
         reader = new ObjectInputStream(socket.getInputStream());
         this.logger = logger;
-        this.inbox = new Inbox(logger, this);
+        this.inbox = new Inbox(logger, this, locks);
         listenThread = new Thread(this::listenMessages);
         listenThread.start();
     }
 
-    public static Connection fromSocket(Socket socket, SafeLogger logger) throws IOException {
-        return new Connection(socket, logger);
+    public static Connection fromSocket(Socket socket, SafeLogger logger, LockSet locks) throws IOException {
+        return new Connection(socket, logger, locks);
+    }
+
+    public static Connection fromAddress(Address address, SafeLogger logger, LockSet locks) throws IOException {
+        return new Connection(new Socket(address.getIp(), address.getPort()), logger, locks);
     }
 
     public static Connection fromAddress(Address address, SafeLogger logger) throws IOException {
-        return new Connection(new Socket(address.getIp(), address.getPort()), logger);
+        return fromAddress(address, logger, new LockSet());
     }
 
     public void clearBindings(Topic topic) {

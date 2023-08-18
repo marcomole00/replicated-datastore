@@ -15,7 +15,7 @@ import java.util.logging.Level;
 
 public class Node {
 
-    private final  HashMap<Integer, KeySafeConnection> peers = new HashMap<>();
+    private final  HashMap<Integer, Connection> peers = new HashMap<>();
 
     SafeCounter contactCounter = new SafeCounter();
 
@@ -30,6 +30,8 @@ public class Node {
     DataBase db = new DataBase();
 
     AbortedStack aborted = new AbortedStack();
+
+    private final LockSet locks = new LockSet();
 
     public void run() throws Exception {
         //for each node in the topology create a connection
@@ -49,12 +51,16 @@ public class Node {
                     logger.log(Level.WARNING ,"Received connection from unknown address " + socket.getInetAddress().getHostAddress());
                     continue;
                 }
-                KeySafeConnection connection = KeySafeConnection.fromSocket(socket, logger, db);
+                Connection connection = Connection.fromSocket(socket, logger, locks);
                 connection.bindCheckPrevious(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+    }
+
+    public LockSet getLocks() {
+        return locks;
     }
 
     boolean onPresentation(Connection connection, Message message) {
@@ -68,7 +74,7 @@ public class Node {
         }
         else if (0 <= p.getId() && p.getId() < config.getNumberOfNodes()) {
             synchronized (peers) {
-                peers.put(p.getId(), (KeySafeConnection) connection);
+                peers.put(p.getId(), connection);
                 System.out.println("Received connection from " + p.getId());
                 connection.clearBindings(Topic.any());
                 connection.bindCheckPrevious(new MessageFilter(Topic.any(), Read.class), this::onRead);
@@ -118,6 +124,7 @@ public class Node {
     }
 
     boolean onContactRequest(Connection c, Message msg) {
+        db.putIfNotPresent(msg.getKey());
         ContactRequest contactRequest = (ContactRequest) msg;
         int node = new ArrayList<>(peers.values()).indexOf(c);
         Metadata metadata = db.get(msg.getKey()).getMetadata();
@@ -180,7 +187,7 @@ public class Node {
     }
 
     boolean onGetRequest(Connection c, Message msg) {
-        //GetRequest getRequest = (GetRequest) msg;
+        db.putIfNotPresent(msg.getKey());
         System.out.println("Received get request for key " + msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (!metadata.reading) {
@@ -209,6 +216,7 @@ public class Node {
     boolean onPutRequest(Connection c, Message msg) {
         System.out.println("Received put request for key " + msg.getKey());
         PutRequest putRequest = (PutRequest) msg;
+        db.putIfNotPresent(msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (metadata.state != State.Idle) {
             aborted.push(new ImmutablePair<>(c, putRequest));
@@ -227,6 +235,7 @@ public class Node {
 
     boolean onRead(Connection c, Message msg) {
         System.out.println("Received read request for key " + msg.getKey());
+        db.putIfNotPresent(msg.getKey());
         Entry  entry = db.get(msg.getKey());
         String value = entry.getValue();
         int version = entry.getVersion();
@@ -262,9 +271,4 @@ public class Node {
         operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         return true;
     }
-
-    public DataBase getDb() {
-        return db;
-    }
 }
-

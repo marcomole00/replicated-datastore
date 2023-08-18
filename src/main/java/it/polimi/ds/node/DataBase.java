@@ -9,4 +9,9 @@ public class DataBase extends HashMap<String, Entry> {
             put(key, new it.polimi.ds.node.Entry(null, 0, new Metadata()));
         }
     }
+
+    @Override
+    public synchronized it.polimi.ds.node.Entry get(Object key) {
+        return super.get(key);
+    }
 }

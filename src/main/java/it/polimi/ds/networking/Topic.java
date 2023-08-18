@@ -53,4 +53,17 @@ public class Topic {
                 ", string='" + string + '\'' +
                 '}';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Topic topic = (Topic) o;
+        return type == topic.type && Objects.equals(string, topic.string);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, string);
+    }
 }
