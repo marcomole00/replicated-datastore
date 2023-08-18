@@ -27,25 +27,23 @@ public class Inbox {
 
     void updateQueue(Topic topic) {
         synchronized (queue) {
-            synchronized (locks.get(topic)) {
-                Message processed;
-                do {
-                    processed = null;
-                    int i = 0;
-                    while (i < queue.size()) {
-                        Message m = queue.get(i);
-                        queue.remove(i);
-                        if (matchBindings(m, topic)) {
-                            processed = m;
-                            break;
-                        }
-                        else {
-                            queue.add(i, m);
-                            i++;
-                        }
+            Message processed;
+            do {
+                processed = null;
+                int i = 0;
+                while (i < queue.size()) {
+                    Message m = queue.get(i);
+                    queue.remove(i);
+                    if (matchBindings(m, topic)) {
+                        processed = m;
+                        break;
                     }
-                } while (processed != null);
-            }
+                    else {
+                        queue.add(i, m);
+                        i++;
+                    }
+                }
+            } while (processed != null);
         }
     }
 
@@ -71,14 +69,12 @@ public class Inbox {
     }
 
     Boolean matchBindings(Message m, Topic topic) {
-        synchronized (locks.get(topic)) {
-            for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.getMatchList(topic)) { // always match messages also against topic "any"
-                if(b.getKey().match(m)) {  // getKey extracts the MessageFilter
-                    return b.getValue().test(connection, m);
-                }
+        for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.getMatchList(topic)) { // always match messages also against topic "any"
+            if(b.getKey().match(m)) {  // getKey extracts the MessageFilter
+                return b.getValue().test(connection, m);
             }
-            return false;
         }
+        return false;
     }
 
     BiPredicate<Connection, Message> keySafeAction(BiPredicate<Connection, Message> action) {
@@ -95,9 +91,11 @@ public class Inbox {
     }
 
     public void add(Message message) {
-        synchronized (queue) {
-            queue.add(message); //TODO: presentation key
-            updateQueue(Topic.fromString(message.getKey()));
+        synchronized (Topic.fromString(message.getKey())) {
+            synchronized (queue) {
+                queue.add(message); //TODO: presentation key
+                updateQueue(Topic.fromString(message.getKey()));
+            }
         }
     }
 }
