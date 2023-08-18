@@ -132,6 +132,7 @@ public class Node {
                 metadata.coordinator = node;
                 metadata.contactId = contactRequest.getContactId();
                 c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
+                return true;
             }
             else {
                 return false;
@@ -141,17 +142,16 @@ public class Node {
             if (node > metadata.coordinator) {
                 c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
             }
-            else {
-                return false;
-            }
+            return false;
         }
         else if (db.get(msg.getKey()).getMetadata().state == State.Idle){
             changeState(msg.getKey(), State.Ready);
             metadata.coordinator = node;
             metadata.contactId = contactRequest.getContactId();
             c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
+            return true;
         }
-        return false;
+        return false; // if state is Committed or Aborted don't consume the message
     }
 
     boolean onContactResponse(Connection ignored, Message msg) {
