@@ -5,7 +5,7 @@ public class Presentation extends Message {
     private final int id;
 
    public  Presentation(int id) {
-        super(""); // only message type is needed
+        super(null); // only message type is needed
         this.id = id;
     }
 

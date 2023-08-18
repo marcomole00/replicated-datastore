@@ -4,7 +4,10 @@ public abstract class Message implements java.io.Serializable{
     private final String key;
 
     Message(String key) {
-        this.key = key.replaceAll("\\s", ""); // remove all spaces
+        if (key == null)
+            this.key = null;
+        else
+            this.key = key.replaceAll("\\s", ""); // remove all spaces
     }
 
     public String getKey() {

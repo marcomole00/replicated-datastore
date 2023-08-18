@@ -21,6 +21,8 @@ public class Topic {
      }
 
      public static Topic fromString(String string) {
+        if (string == null)
+            return Topic.any();
         return new Topic(TopicType.STRING, string);
      }
 

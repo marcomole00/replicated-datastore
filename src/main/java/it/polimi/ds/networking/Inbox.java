@@ -91,7 +91,7 @@ public class Inbox {
     }
 
     public void add(Message message) {
-        synchronized (Topic.fromString(message.getKey())) {
+        synchronized (locks.get(Topic.fromString(message.getKey()))) {
             synchronized (queue) {
                 queue.add(message); //TODO: presentation key
                 updateQueue(Topic.fromString(message.getKey()));
