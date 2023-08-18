@@ -147,7 +147,7 @@ public class Node {
             metadata.contactId = contactRequest.getContactId();
             c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
         }
-        return true;
+        return false;
     }
 
     boolean onContactResponse(Connection ignored, Message msg) {
