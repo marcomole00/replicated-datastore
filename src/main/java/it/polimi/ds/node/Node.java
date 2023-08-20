@@ -110,10 +110,7 @@ public class Node {
                     db.get(key).getMetadata().contactId = null;
                 } else if (newState == State.Ready) {
                     c.bind(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort, node != serverSocket.myId);
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest, node != serverSocket.myId);
-                    c.bind(new MessageFilter(Topic.fromString(key), Write.class), this::onWrite, node != serverSocket.myId);
                 } else if (newState == State.Waiting) {
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest, node != serverSocket.myId);
                     c.bind(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack, node != serverSocket.myId);
                     c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse, node != serverSocket.myId);
                 }
