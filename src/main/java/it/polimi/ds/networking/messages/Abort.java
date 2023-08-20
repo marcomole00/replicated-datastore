@@ -8,5 +8,11 @@ public class Abort extends  Message{
 
     }
 
+    @Override
+    public String toString() {
+        return "Abort{" +
+                "key='" + getKey() + '\'' +
+                '}';
+    }
 
 }

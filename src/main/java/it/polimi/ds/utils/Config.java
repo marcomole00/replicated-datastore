@@ -1,5 +1,7 @@
 package it.polimi.ds.utils;
 
+import it.polimi.ds.exceptions.ConfigurationException;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.Scanner;
@@ -9,15 +11,10 @@ public class Config {
     int writeQuorum;
     private Topology topology = new Topology();
 
-    public Config() throws FileNotFoundException {
+    public Config() throws FileNotFoundException, ConfigurationException {
         //open file, read the topology and the quorums
         File file;
-        try {
-            file = new File("config.txt");
-        } catch (Exception e) {
-            System.out.println("Error in opening the topology file");
-            return ;
-        }
+        file = new File("config.txt");
         Scanner sc = new Scanner(file);
 
 
@@ -25,8 +22,8 @@ public class Config {
             readQuorum = sc.nextInt();
             writeQuorum = sc.nextInt();
         } catch (Exception e) {
-            System.out.println("Error in reading the topology file, quorums specified incorrectly");
-            return ;
+            throw new ConfigurationException("Error in reading the topology file, quorums specified incorrectly");
+
         }
 
         while (sc.hasNextLine()) {
@@ -34,39 +31,37 @@ public class Config {
             if (line.isBlank()) {
                 continue;
             }
+            if(line.startsWith("#")) {
+                continue;
+            }
             String[] pieces = line.split(" ");
             if (pieces.length != 2) {
-                System.out.println("Error in reading the topology file, line " + line + " is not formatted correctly");
-                return ;
+                throw  new ConfigurationException("Error in reading the topology file, line " + line + " is not formatted correctly");
             }
             try {
                 int port = Integer.parseInt(pieces[1]);
                 topology.addNode(pieces[0], port);
 
             } catch (Exception e) {
-                System.out.println("Error in reading the topology file, line " + line + " is not formatted correctly");
-                return ;
+                throw  new ConfigurationException("Error in reading the topology file, line " + line + " is not formatted correctly");
             }
         }
 
         if (readQuorum + writeQuorum <= getNumberOfNodes()) {
-            System.out.println("QR + QW must be greater than N");
-            return ;
+            throw  new ConfigurationException("QR + QW must be greater than N");
         }
 
         if (readQuorum > getNumberOfNodes()) {
-            System.out.println("QR must be less than N");
-            return ;
+            throw  new ConfigurationException("QR must be less than N");
+
         }
 
         if (writeQuorum > getNumberOfNodes()) {
-            System.out.println("QW must be less than N");
-            return ;
+            throw  new ConfigurationException("QW must be less than N");
         }
 
-        if (readQuorum < (getNumberOfNodes() / 2) + 1) {
-            System.out.println("QR must be greater than N/2");
-            return ;
+        if (writeQuorum < (getNumberOfNodes() / 2) + 1) {
+            throw  new ConfigurationException("QW must be greater than N/2");
         }
     }
 

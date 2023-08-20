@@ -71,12 +71,13 @@ public class Node {
             connection.clearBindings(Topic.any());
             connection.bind(new MessageFilter(Topic.any(), GetRequest.class), this::onGetRequest);
             connection.bind(new MessageFilter(Topic.any(), PutRequest.class), this::onPutRequest);
-            System.out.println("a client connected");
+            connection.setId(-1);
         }
         else if (0 <= p.getId() && p.getId() < config.getNumberOfNodes()) {
             synchronized (peers) {
                 peers.put(p.getId(), connection);
                 System.out.println("Received connection from " + p.getId());
+                connection.setId(p.getId());
                 connection.clearBindings(Topic.any());
                 connection.bind(new MessageFilter(Topic.any(), Read.class), this::onRead);
                 connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
@@ -126,40 +127,45 @@ public class Node {
 
     boolean onContactRequest(Connection c, Message msg) {
         db.putIfNotPresent(msg.getKey());
-        ContactRequest contactRequest = (ContactRequest) msg;
-        int node = new ArrayList<>(peers.values()).indexOf(c);
-        Metadata metadata = db.get(msg.getKey()).getMetadata();
-        if(db.get(msg.getKey()).getMetadata().state == State.Waiting) {
-            if (node > serverSocket.getMyId()) {
-                changeState(msg.getKey(), State.Aborted);
-                for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
-                    peers.get(i % config.getNumberOfNodes()).send(new Abort(msg.getKey()));
+            ContactRequest contactRequest = (ContactRequest) msg;
+            //int node = new ArrayList<>(peers.values()).indexOf(c); // TODO this is wrong, node is not the id of the sender
+            int node = c.getId();
+            if (node == -1 || node == -2) return false; // drop message
+            System.out.println("I received a contact request from " + node + " message was: " + contactRequest);
+            Metadata metadata = db.get(msg.getKey()).getMetadata();
+            if (db.get(msg.getKey()).getMetadata().state == State.Waiting) {
+                if (node > serverSocket.getMyId()) {
+                    changeState(msg.getKey(), State.Aborted);
+                    for (int i = serverSocket.getMyId() + 1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
+                        peers.get(i % config.getNumberOfNodes()).send(new Abort(msg.getKey()));
+                    }
+                    aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
+                    changeState(msg.getKey(), State.Ready);
+                    metadata.coordinator = node;
+                    metadata.contactId = contactRequest.getContactId();
+                    c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
+                    return true;
+                } else {
+                    return false;
                 }
-                aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
+            } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
+                if (node > metadata.coordinator) {
+                    c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
+                }
+                return false;
+            } else if (db.get(msg.getKey()).getMetadata().state == State.Idle) {
+                logger.log(Level.INFO, "changing state to ready");
                 changeState(msg.getKey(), State.Ready);
+                logger.log(Level.INFO, "changed state to ready, now i set who is the new coordinator");
+
                 metadata.coordinator = node;
                 metadata.contactId = contactRequest.getContactId();
                 c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
                 return true;
             }
-            else {
-                return false;
-            }
-        }
-        else if (db.get(msg.getKey()).getMetadata().state == State.Ready){
-            if (node > metadata.coordinator) {
-                c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
-            }
-            return false;
-        }
-        else if (db.get(msg.getKey()).getMetadata().state == State.Idle){
-            changeState(msg.getKey(), State.Ready);
-            metadata.coordinator = node;
-            metadata.contactId = contactRequest.getContactId();
-            c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
-            return true;
-        }
-        return false; // if state is Committed or Aborted don't consume the message
+            return false; // if state is Committed or Aborted don't consume the message
+
+
     }
 
     boolean onContactResponse(Connection ignored, Message msg) {
@@ -189,7 +195,6 @@ public class Node {
 
     boolean onGetRequest(Connection c, Message msg) {
         db.putIfNotPresent(msg.getKey());
-        System.out.println("Received get request for key " + msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (!metadata.reading) {
             metadata.reading = true;
@@ -215,12 +220,12 @@ public class Node {
     }
 
     boolean onPutRequest(Connection c, Message msg) {
-        System.out.println("Received put request for key " + msg.getKey());
         PutRequest putRequest = (PutRequest) msg;
         db.putIfNotPresent(msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (metadata.state != State.Idle) {
             aborted.push(new ImmutablePair<>(c, putRequest));
+            logger.log(Level.INFO, "Aborted: " + putRequest);
             return true;
         }
         changeState(msg.getKey(), State.Waiting);
@@ -235,7 +240,6 @@ public class Node {
     }
 
     boolean onRead(Connection c, Message msg) {
-        System.out.println("Received read request for key " + msg.getKey());
         db.putIfNotPresent(msg.getKey());
         Entry  entry = db.get(msg.getKey());
         String value = entry.getValue();

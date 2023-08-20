@@ -23,6 +23,8 @@ public class Connection {
 
     private final Inbox inbox;
 
+    private int id = -2;
+
     protected Connection(Socket socket, SafeLogger logger, LockSet locks) throws IOException {
         this.socket = socket;
         writer = new ObjectOutputStream(socket.getOutputStream());
@@ -70,22 +72,22 @@ public class Connection {
         try {
             synchronized (writer) {
                 writer.writeObject(message);
-                logger.log(Level.INFO, "Sent message: " + message);
+                logger.log(Level.INFO, "Sent message: " + message + " to " + id);
             }
         } catch (IOException ignored) { /*ignored*/ }
     }
 
     void listenMessages() {
         String toLog = "Listening for new messages from: " + socket.getInetAddress();
-        logger.log(Level.INFO, toLog);
+       // logger.log(Level.INFO, toLog);
         while (isRunning()) {
             try {
                 Message msg = (Message) reader.readObject();
                 logger.log(Level.INFO, "Received message: " + msg);
-                logger.log(Level.INFO, "No binding found");
+               // logger.log(Level.INFO, "No binding found");
                 inbox.add(msg);
             } catch (IOException e) {
-                toLog = "IOException when reading message: " + e.getMessage();
+                toLog = "IOException in connection "+ id  +" when reading message: " + e.getMessage();
                 logger.log(Level.SEVERE, toLog);
             } catch (ClassNotFoundException ignored) {}
         }
@@ -122,5 +124,13 @@ public class Connection {
             logger.log(Level.WARNING, "Interrupted", e);
             Thread.currentThread().interrupt();
         }
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public int getId() {
+        return id;
     }
 }

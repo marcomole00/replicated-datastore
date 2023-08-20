@@ -11,4 +11,12 @@ public class PutResponse extends Message{
     public int getVersion() {
         return version;
     }
+
+    @Override
+    public String toString() {
+        return "PutResponse{" +
+                "key='" + getKey() + '\'' +
+                ", version=" + version +
+                '}';
+    }
 }

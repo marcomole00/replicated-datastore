@@ -21,4 +21,13 @@ public class Nack extends Message {
     public int getContactId() {
         return contactId;
     }
+
+    @Override
+    public String toString() {
+        return "Nack{" +
+                "key='" + getKey() + '\'' +
+                ", nodeID=" + nodeID +
+                ", contactId=" + contactId +
+                '}';
+    }
 }

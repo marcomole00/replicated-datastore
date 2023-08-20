@@ -10,4 +10,12 @@ public class PutRequest extends Message{
     public String getValue() {
         return value;
     }
+
+    @Override
+    public String toString() {
+        return "PutRequest{" +
+                "key='" + getKey() + '\'' +
+                ", value='" + value + '\'' +
+                '}';
+    }
 }

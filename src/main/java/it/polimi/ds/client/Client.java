@@ -1,5 +1,6 @@
 package it.polimi.ds.client;
 
+import it.polimi.ds.exceptions.ConfigurationException;
 import it.polimi.ds.networking.*;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.Config;
@@ -19,10 +20,11 @@ public class Client {
 
     Topology topology = new Topology();
 
-    public void run() throws IOException {
+    public void run() throws IOException, ConfigurationException {
         topology = new Config().getTopology();
         System.out.println(topology);
         System.out.println("usage: get <key> from <node> | put <key> <value> to <node>");
+        System.out.println("tests: rr put <number of puts> <milliseconds of delay between puts> <same key flag>");
         while (running) {
             String cmd = reader.readLine();
             runCommand(cmd);
@@ -34,22 +36,23 @@ public class Client {
         if (cmd.matches("stop")) {
             logger.log(Level.INFO, "Stopping the client");
             running = false;
-        }
-        else if (cmd.matches("get [^\\s]+ from [0-9]+")) {
+        } else if (cmd.matches("get [^\\s]+ from [0-9]+")) {
             logger.log(Level.INFO, "Getting the value for key " + pieces[1]);
             get(pieces[1], Integer.parseInt(pieces[3]));
-        }
-        else if (cmd.matches("put [^\\s]+ [^\\s]+ to [0-9]+")) {
+        } else if (cmd.matches("put [^\\s]+ [^\\s]+ to [0-9]+")) {
             logger.log(Level.INFO, "Putting into key " + pieces[1] + " the value " + pieces[2]);
             put(pieces[1], pieces[2], Integer.parseInt(pieces[4]));
-        }
-        else if (cmd.matches("test1")) {
+        } else if (cmd.matches("test1")) {
             test1();
+        } else if (cmd.matches("rr put [0-9]+ [0-9]+ [0-1]")) {
+            String[] pieces2 = cmd.split(" ");
+            round_robin_put_test(Integer.parseInt(pieces2[2]), Integer.parseInt(pieces2[3]), Boolean.parseBoolean(pieces2[4]));
         }
-        else {
-            logger.log(Level.WARNING, "Unknown command or wrong syntax, no action taken");
+        else{
+                logger.log(Level.WARNING, "Unknown command or wrong syntax, no action taken");
+            }
         }
-    }
+
 
     Connection openConnection(int node) throws IOException {
         return Connection.fromAddress(new Address(topology.getIp(node), topology.getPort(node)), logger);
@@ -86,8 +89,22 @@ public class Client {
     void test1() {
         for (int i = 0; i < 500; i++) {
             try {
-                put("key", "value" + i, (i+1) % topology.size());
-                Thread.sleep(20);
+                put("key", "value" + i, i % topology.size());
+                Thread.sleep(200);
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+
+    void round_robin_put_test(int number_of_operations, int milliseconds_of_idle, boolean same_key){
+        for (int i = 0; i < number_of_operations; i++) {
+            try {
+                put("key" + (!same_key?"":i), "value" + i, i % topology.size());
+                if(milliseconds_of_idle > 0) Thread.sleep(milliseconds_of_idle);
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {

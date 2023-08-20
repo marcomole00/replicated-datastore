@@ -7,4 +7,11 @@ public class Read extends  Message {
         super(key);
     }
 
+    @Override
+    public String toString() {
+        return "Read{" +
+                "key='" + getKey() + '\'' +
+                '}';
+    }
+
 }

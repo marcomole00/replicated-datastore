@@ -16,4 +16,13 @@ public class GetResponse extends Message{
     public String getValue() {
         return value;
     }
+
+    @Override
+    public String toString() {
+        return "GetResponse{" +
+                "key='" + getKey() + '\'' +
+                ", value='" + value + '\'' +
+                ", version=" + version +
+                '}';
+    }
 }

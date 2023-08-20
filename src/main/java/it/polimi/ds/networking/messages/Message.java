@@ -13,4 +13,6 @@ public abstract class Message implements java.io.Serializable{
     public String getKey() {
         return key;
     }
+
+    public abstract String toString();
 }

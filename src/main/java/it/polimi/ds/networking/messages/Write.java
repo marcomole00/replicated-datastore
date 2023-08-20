@@ -19,4 +19,13 @@ public class Write extends  Message{
     public int getVersion() {
         return version;
     }
+
+    @Override
+    public String toString() {
+        return "Write{" +
+                "key='" + getKey() + '\'' +
+                ", value='" + value + '\'' +
+                ", version=" + version +
+                '}';
+    }
 }

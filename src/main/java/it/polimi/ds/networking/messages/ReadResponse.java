@@ -17,4 +17,13 @@ public class ReadResponse extends Message {
     public int getVersion() {
         return version;
     }
+
+    @Override
+    public String toString() {
+        return "ReadResponse{" +
+                "key='" + getKey() + '\'' +
+                ", value='" + value + '\'' +
+                ", version=" + version +
+                '}';
+    }
 }

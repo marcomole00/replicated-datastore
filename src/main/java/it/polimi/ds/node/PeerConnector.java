@@ -36,6 +36,7 @@ public class PeerConnector implements  Runnable{
                             Address address = topology.getNodes().get(i);
                             Connection connection = Connection.fromAddress(address, logger, node.getLocks());
                             accepted_connections++;
+                            connection.setId(i);
                             connection.send(new Presentation(myId));
                             connection.bind(new MessageFilter (Topic.any(), Read.class), node::onRead);
                             connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);

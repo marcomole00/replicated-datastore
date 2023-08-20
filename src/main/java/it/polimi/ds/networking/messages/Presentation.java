@@ -19,4 +19,5 @@ public class Presentation extends Message {
                 "id=" + id +
                 '}';
     }
+
 }

@@ -20,4 +20,13 @@ public class ContactResponse extends  Message{
     public int getContactId() {
         return contactId;
     }
+
+    @Override
+    public String toString() {
+        return "ContactResponse{" +
+                "key='" + getKey() + '\'' +
+                ", version=" + version +
+                ", contactId=" + contactId +
+                '}';
+    }
 }

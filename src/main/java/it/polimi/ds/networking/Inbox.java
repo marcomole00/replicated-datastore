@@ -56,7 +56,7 @@ public class Inbox {
 
     public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
         synchronized (locks.get(filter.getTopic())) {
-            logger.log(Level.INFO,"Binding " + filter + " to " + action);
+           // logger.log(Level.INFO,"Binding " + filter + " to " + action);
             bindings.insert(filter, keySafeAction(action));
         }
     }
@@ -64,7 +64,7 @@ public class Inbox {
     public void clearBindings(Topic topic) {
         synchronized (locks.get(topic)) {
             bindings.clear(topic);
-            logger.log(Level.INFO, "cLearing bindings for " + topic);
+            //logger.log(Level.INFO, "Clearing bindings for " + topic);
         }
     }
 

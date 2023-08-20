@@ -11,4 +11,12 @@ public class ContactRequest extends  Message {
     public int getContactId() {
         return contactId;
     }
+
+    @Override
+    public String toString() {
+        return "ContactRequest{" +
+                "key='" + getKey() + '\'' +
+                ", contactId=" + contactId +
+                '}';
+    }
 }
