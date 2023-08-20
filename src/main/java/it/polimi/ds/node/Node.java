@@ -80,6 +80,7 @@ public class Node {
                 connection.setId(p.getId());
                 connection.clearBindings(Topic.any());
                 connection.bind(new MessageFilter(Topic.any(), Read.class), this::onRead);
+                connection.bind(new MessageFilter(Topic.any(), Write.class), this::onWrite);
                 connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
                 connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), this::onContactRequest);
             }
@@ -259,6 +260,9 @@ public class Node {
         if (metadata.readCounter == config.getReadQuorum()-1) {
             metadata.readClient.send(new GetResponse(msg.getKey(), metadata.latestValue, metadata.readMaxVersion));
             metadata.readClient.stop();
+            for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getReadQuorum(); i++) {
+                peers.get(i).send(new Write(msg.getKey(), metadata.latestValue, metadata.readMaxVersion));
+            }
             metadata.readMaxVersion = -1;
             metadata.latestValue = null;
             metadata.readClient = null;
@@ -270,6 +274,9 @@ public class Node {
 
     boolean onWrite(Connection ignored, Message msg) {
         Write write = (Write) msg;
+        if (db.get(write.getKey()).getVersion() >= write.getVersion()) {
+            return false; // drop message
+        }
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
         changeState(write.getKey(), State.Idle);
