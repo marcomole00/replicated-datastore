@@ -45,21 +45,16 @@ public class Connection {
         return fromAddress(address, logger, new LockSet());
     }
 
+    public void updateQueue(Topic topic) {
+        inbox.updateQueue(topic);
+    }
+
     public void clearBindings(Topic topic) {
         inbox.clearBindings(topic);
     }
 
-    public void bind(MessageFilter filter, BiPredicate<Connection, Message> action, boolean checkPrevious) {
-        if(checkPrevious) {
-            inbox.bindCheckPrevious(filter, action);
-        }
-        else {
-            inbox.bind(filter, action);
-        }
-    }
-
     public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        bind(filter, action, true);
+        inbox.bind(filter, action);
     }
 
     /**

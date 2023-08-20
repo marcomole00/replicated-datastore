@@ -19,14 +19,19 @@ public class Inbox {
 
     private final LockSet locks;
 
+    private boolean checking = false;
+
     public  Inbox(SafeLogger logger, Connection connection, LockSet locks) {
         this.logger = logger;
         this.connection = connection;
         this.locks = locks;
     }
 
-    void updateQueue(Topic topic) {
+    public void updateQueue(Topic topic) {
         synchronized (queue) {
+            if (checking)
+                return;
+            checking = true;
             Message processed;
             do {
                 processed = null;
@@ -44,6 +49,7 @@ public class Inbox {
                     }
                 }
             } while (processed != null);
+            checking = false;
         }
     }
 

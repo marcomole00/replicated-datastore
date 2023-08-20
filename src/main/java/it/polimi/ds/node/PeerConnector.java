@@ -38,9 +38,9 @@ public class PeerConnector implements  Runnable{
                             accepted_connections++;
                             connection.setId(i);
                             connection.send(new Presentation(myId));
-                            connection.bind(new MessageFilter (Topic.any(), Read.class), node::onRead);
-                            connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);
-                            connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node::onContactRequest);
+                            connection.bind(new MessageFilter (Topic.any(), Read.class), node.decoratedCallback(node::onRead));
+                            connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node.decoratedCallback(node::onReadResponse));
+                            connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node.decoratedCallback(node::onContactRequest));
 
 
                             System.out.println(myId + " Connecting to " + i);
