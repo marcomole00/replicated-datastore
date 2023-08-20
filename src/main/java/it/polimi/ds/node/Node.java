@@ -101,7 +101,7 @@ public class Node {
         }
         else {
             for (Connection c : peers.values()) {
-                int node = new ArrayList<>(peers.values()).indexOf(c);
+                Integer node = c.getId();
                 if (newState == State.Idle) {
                     c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), this::onContactRequest, node != serverSocket.myId);
                     db.get(key).getMetadata().toWrite = null;
@@ -128,9 +128,8 @@ public class Node {
     boolean onContactRequest(Connection c, Message msg) {
         db.putIfNotPresent(msg.getKey());
             ContactRequest contactRequest = (ContactRequest) msg;
-            //int node = new ArrayList<>(peers.values()).indexOf(c); // TODO this is wrong, node is not the id of the sender
-            int node = c.getId();
-            if (node == -1 || node == -2) return false; // drop message
+            Integer node = c.getId();
+            if (node == -1) return false; // drop message
             System.out.println("I received a contact request from " + node + " message was: " + contactRequest);
             Metadata metadata = db.get(msg.getKey()).getMetadata();
             if (db.get(msg.getKey()).getMetadata().state == State.Waiting) {

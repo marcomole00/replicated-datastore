@@ -1,6 +1,5 @@
 package it.polimi.ds.networking;
 
-import it.polimi.ds.networking.messages.ContactRequest;
 import it.polimi.ds.networking.messages.Message;
 import it.polimi.ds.utils.SafeLogger;
 
@@ -9,7 +8,6 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 
-import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
@@ -23,7 +21,7 @@ public class Connection {
 
     private final Inbox inbox;
 
-    private int id = -2;
+    private Integer id;
 
     protected Connection(Socket socket, SafeLogger logger, LockSet locks) throws IOException {
         this.socket = socket;
@@ -130,7 +128,7 @@ public class Connection {
         this.id = id;
     }
 
-    public int getId() {
+    public Integer getId() {
         return id;
     }
 }
