@@ -136,6 +136,10 @@ public class Node {
     }
 
     boolean onAbort(Connection c, Message msg) {
+        Abort abort = (Abort) msg;
+        Metadata metadata = db.get(abort.getKey()).getMetadata();
+        if (abort.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
+            return false;
         changeState(msg.getKey(), State.Idle);
         return true;
     }
@@ -198,7 +202,7 @@ public class Node {
         if (contactResponse.getVersion() > metadata.writeMaxVersion)
             metadata.writeMaxVersion = contactResponse.getVersion();
         if (metadata.ackCounter == config.getWriteQuorum()-1) {
-            Write write = new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1);
+            Write write = new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1, metadata.contactId);
             PutResponse putResponse = new PutResponse(msg.getKey(), metadata.writeMaxVersion+1);
             changeState(contactResponse.getKey(), State.Committed);
             db.get(msg.getKey()).setValue(write.getValue());
@@ -294,8 +298,11 @@ public class Node {
         return true;
     }
 
-    boolean onWrite(Connection ignored, Message msg) {
+    boolean onWrite(Connection c, Message msg) {
         Write write = (Write) msg;
+        Metadata metadata = db.get(write.getKey()).getMetadata();
+        if (write.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
+            return false;
         logger.log(Level.INFO, "Elaborating on: " + write);
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());

@@ -5,10 +5,13 @@ public class Write extends  Message{
     private final String value;
     private final int version;
 
-    public Write(String key, String value, int version) {
+    private final int contactId;
+
+    public Write(String key, String value, int version, int contactId) {
         super(key);
         this.value = value;
         this.version = version;
+        this.contactId = contactId;
     }
 
 
@@ -20,12 +23,17 @@ public class Write extends  Message{
         return version;
     }
 
+    public int getContactId() {
+        return contactId;
+    }
+
     @Override
     public String toString() {
         return "Write{" +
                 "key='" + getKey() + '\'' +
                 ", value='" + value + '\'' +
-                ", version=" + version +
+                ", version=" + version + '\'' +
+                ", contactId=" + contactId +
                 '}';
     }
 }
