@@ -104,4 +104,10 @@ public class Inbox {
             }
         }
     }
+
+    public String printQueue() {
+        synchronized (queue) {
+            return queue.toString();
+        }
+    }
 }

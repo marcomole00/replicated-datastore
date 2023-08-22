@@ -76,7 +76,7 @@ public class Connection {
         while (isRunning()) {
             try {
                 Message msg = (Message) reader.readObject();
-                logger.log(Level.INFO, "Received message: " + msg);
+                logger.log(Level.INFO, "Received message: " + msg + "from " + id);
                // logger.log(Level.INFO, "No binding found");
                 inbox.add(msg);
             } catch (IOException e) {
@@ -125,5 +125,13 @@ public class Connection {
 
     public Integer getId() {
         return id;
+    }
+
+    public String printQueue() {
+        return inbox.printQueue();
+    }
+
+    public String printSocket() {
+        return socket.toString();
     }
 }

@@ -46,7 +46,7 @@ public class Client {
             test1();
         } else if (cmd.matches("rr put [0-9]+ [0-9]+ [0-1]")) {
             String[] pieces2 = cmd.split(" ");
-            round_robin_put_test(Integer.parseInt(pieces2[2]), Integer.parseInt(pieces2[3]), Boolean.parseBoolean(pieces2[4]));
+            round_robin_put_test(Integer.parseInt(pieces2[2]), Integer.parseInt(pieces2[3]), Integer.parseInt(pieces2[4]));
         }
         else{
                 logger.log(Level.WARNING, "Unknown command or wrong syntax, no action taken");
@@ -74,6 +74,7 @@ public class Client {
 
     void put(String key, String value, int node) throws IOException {
         Connection connection = openConnection(node);
+        logger.log(Level.INFO, "opened connection with node: " + node + ", socket: " + connection.printSocket());
         connection.send(new Presentation(-1));
         connection.send(new PutRequest(key, value));
         connection.bind(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
@@ -89,10 +90,15 @@ public class Client {
     void test1() {
         for (int i = 0; i < 500; i++) {
             try {
-                put("key", "value" + i, i % topology.size());
+               Thread put_thread = new Thread(() -> {
+                   try {
+                       put("key", "value", 0);
+                   } catch (IOException e) {
+                       e.printStackTrace();
+                   }
+               });
+               put_thread.start();
                 Thread.sleep(200);
-            } catch (IOException e) {
-                e.printStackTrace();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -100,10 +106,13 @@ public class Client {
     }
 
 
-    void round_robin_put_test(int number_of_operations, int milliseconds_of_idle, boolean same_key){
+    void round_robin_put_test(int number_of_operations, int milliseconds_of_idle, int same_key){
         for (int i = 0; i < number_of_operations; i++) {
             try {
-                put("key" + (!same_key?"":i), "value" + i, i % topology.size());
+
+                if (same_key == 1) put("key", "value" + i, i % topology.size());
+                else put("key" + i, "value" + i, i % topology.size());
+
                 if(milliseconds_of_idle > 0) Thread.sleep(milliseconds_of_idle);
             } catch (IOException e) {
                 e.printStackTrace();
