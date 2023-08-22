@@ -63,8 +63,8 @@ public class Inbox {
         synchronized (queue) {
             for (int i = 0; i < queue.size(); i++) {
                 if (queue.get(i).getLeft() > entry.getLeft()) {
-                    queue.add(i-1, entry);
-                    return i-1;
+                    queue.add(i, entry);
+                    return i;
                 }
             }
             queue.add(entry);
