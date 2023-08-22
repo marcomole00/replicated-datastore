@@ -3,13 +3,15 @@ package it.polimi.ds.networking;
 import it.polimi.ds.networking.messages.Message;
 import it.polimi.ds.networking.messages.Presentation;
 import it.polimi.ds.utils.SafeLogger;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.*;
 import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
 public class Inbox {
-    private final List<Message> queue = new LinkedList<>();
+    private final List<Pair<Integer, Message>> queue = new LinkedList<>();
 
     private final BindingSet bindings = new BindingSet();
 
@@ -28,28 +30,45 @@ public class Inbox {
     }
 
     public void updateQueue(Topic topic) {
+        int i = 0;
+        Pair<Integer, Message> p;
+        while (i < queueSize()) {
+            synchronized (queue) {
+                p = queue.get(i);
+                queue.remove(i);
+            }
+            Message m = p.getRight();
+            Random rand = new Random();
+            int id = rand.nextInt(50000);
+            logger.log(Level.INFO, "with id " + id + " testing message " + m + " with index " + i + " from queue: " + queue);
+            if (matchBindings(m, topic)) {
+                logger.log(Level.INFO, "with id " + id + " matched true and exiting the loop with queue: " + queue);
+                break;
+            }
+            else {
+                i = preciseInsert(p) + 1;
+                logger.log(Level.INFO, "with id " + id + " matched false and inserted back in the queue: " + queue);
+            }
+        }
+    }
+
+    int queueSize() {
         synchronized (queue) {
-            if (checking)
-                return;
-            checking = true;
-            Message processed;
-            do {
-                processed = null;
-                int i = 0;
-                while (i < queue.size()) {
-                    Message m = queue.get(i);
-                    queue.remove(i);
-                    if (matchBindings(m, topic)) {
-                        processed = m;
-                        break;
-                    }
-                    else {
-                        queue.add(i, m);
-                        i++;
-                    }
+            return queue.size();
+        }
+    }
+
+    // returns the position it was inserted to
+    int preciseInsert(Pair<Integer, Message> entry) {
+        synchronized (queue) {
+            for (int i = 0; i < queue.size(); i++) {
+                if (queue.get(i).getLeft() > entry.getLeft()) {
+                    queue.add(i-1, entry);
+                    return i-1;
                 }
-            } while (processed != null);
-            checking = false;
+            }
+            queue.add(entry);
+            return queue.size()-1;
         }
     }
 
@@ -99,9 +118,14 @@ public class Inbox {
     public void add(Message message) {
         synchronized (locks.get(Topic.fromString(message.getKey()))) {
             synchronized (queue) {
-                queue.add(message);
-                updateQueue(Topic.fromString(message.getKey()));
+                int lastId;
+                if (queue.isEmpty())
+                    lastId = 0;
+                else
+                    lastId = queue.get(queue.size()-1).getLeft();
+                queue.add(new ImmutablePair<>(lastId+1, message));
             }
+            updateQueue(Topic.fromString(message.getKey()));
         }
     }
 
