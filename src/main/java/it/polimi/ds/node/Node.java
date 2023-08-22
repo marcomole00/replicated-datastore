@@ -99,6 +99,11 @@ public class Node {
         db.get(key).getMetadata().state = newState;
         db.get(key).getMetadata().ackCounter = 0;
         db.get(key).getMetadata().writeMaxVersion = -1;
+        if(newState == State.Idle ){
+            db.get(key).getMetadata().toWrite = null;
+            db.get(key).getMetadata().coordinator = null;
+            db.get(key).getMetadata().contactId = null;
+        }
         if (newState == State.Idle && !aborted.isEmpty()) {
             Pair<Connection, PutRequest> p = aborted.pop();
             onPutRequest(p.getLeft(), p.getRight());
@@ -107,9 +112,6 @@ public class Node {
             for (Connection c : peers.values()) {
                 if (newState == State.Idle) {
                     c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), decoratedCallback(this::onContactRequest));
-                    db.get(key).getMetadata().toWrite = null;
-                    db.get(key).getMetadata().coordinator = null;
-                    db.get(key).getMetadata().contactId = null;
                 } else if (newState == State.Ready) {
                     c.bind(new MessageFilter(Topic.fromString(key), Abort.class), decoratedCallback(this::onAbort));
                     c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), decoratedCallback(this::onContactRequest));
