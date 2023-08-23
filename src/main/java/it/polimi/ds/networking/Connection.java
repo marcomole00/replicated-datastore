@@ -45,8 +45,8 @@ public class Connection {
         return fromAddress(address, logger, new LockSet());
     }
 
-    public void updateQueue(Topic topic) {
-        inbox.updateQueue(topic);
+    public void tryUpdateQueue(Topic topic) {
+        inbox.tryUpdateQueue(topic);
     }
 
     public void clearBindings(Topic topic) {

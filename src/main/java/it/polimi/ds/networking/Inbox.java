@@ -21,7 +21,7 @@ public class Inbox {
 
     private final LockSet locks;
 
-    private boolean checking = false;
+    private final List<Boolean> checking = new ArrayList<>(Collections.nCopies(1, false));
 
     public  Inbox(SafeLogger logger, Connection connection, LockSet locks) {
         this.logger = logger;
@@ -31,51 +31,62 @@ public class Inbox {
 
     public void updateQueue(Topic topic) {
         int i = 0;
-        Pair<Integer, Message> p;
-        while (i < queueSize()) {
+        List<Pair<Integer, Message>> tmp;
+        synchronized (queue) {
+            tmp = new ArrayList<>(queue);
+        }
+        while (i < tmp.size()) {
+            Pair<Integer, Message> p = tmp.get(i);
             synchronized (queue) {
-                p = queue.get(i);
-                queue.remove(i);
-            }
-            Message m = p.getRight();
-            Random rand = new Random();
-            int id = rand.nextInt(50000);
-            logger.log(Level.INFO, "with id " + id + " testing message " + m + " with index " + i + " from queue: " + queue);
-            if (matchBindings(m, topic)) {
-                logger.log(Level.INFO, "with id " + id + " matched true and exiting the loop with queue: " + queue);
-                break;
-            }
-            else {
-                i = preciseInsert(p) + 1;
-                logger.log(Level.INFO, "with id " + id + " matched false and inserted back in the queue: " + queue);
-            }
-        }
-    }
-
-    int queueSize() {
-        synchronized (queue) {
-            return queue.size();
-        }
-    }
-
-    // returns the position it was inserted to
-    int preciseInsert(Pair<Integer, Message> entry) {
-        synchronized (queue) {
-            for (int i = 0; i < queue.size(); i++) {
-                if (queue.get(i).getLeft() > entry.getLeft()) {
-                    queue.add(i, entry);
-                    return i;
+                if (queue.contains(p)) {
+                    queue.remove(p);
+                } else {
+                    i++;
+                    continue;
                 }
             }
-            queue.add(entry);
-            return queue.size()-1;
+            Message m = p.getRight();
+            if (matchBindings(m, topic)) {
+                i = 0; // restart and check all messages that are in the queue
+            }
+            else {
+                synchronized (queue) {
+                    queue.add(0, p);
+                }
+                i++;
+            }
         }
     }
 
-    public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        synchronized (locks.get(filter.getTopic())) {
-            bind(filter, action);
-            updateQueue(filter.getTopic());
+    public void tryUpdateQueue(Topic topic) {
+        synchronized (checking) {
+            if (checking.get(0))
+                return;
+            else
+                checking.set(0, true);
+        }
+        updateQueue(topic);
+        synchronized (checking) {
+            checking.set(0, false);
+            checking.notifyAll();
+        }
+    }
+
+    public void waitUpdateQueue(Topic topic) {
+        synchronized (checking) {
+            while (checking.get(0)) {
+                try {
+                    checking.wait();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            checking.set(0, true);
+        }
+        updateQueue(topic);
+        synchronized (checking) {
+            checking.set(0, false);
+            checking.notifyAll();
         }
     }
 
@@ -125,7 +136,7 @@ public class Inbox {
                     lastId = queue.get(queue.size()-1).getLeft();
                 queue.add(new ImmutablePair<>(lastId+1, message));
             }
-            updateQueue(Topic.fromString(message.getKey()));
+            waitUpdateQueue(Topic.fromString(message.getKey()));
         }
     }
 
