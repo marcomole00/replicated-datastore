@@ -127,12 +127,7 @@ public class Node {
 
     BiPredicate<Connection, Message> decoratedCallback(BiPredicate<Connection, Message> action) {
         return (c,m)-> {
-            logger.log(Level.INFO, "Elaborating on: " + m + " from " + c.getId());
             boolean res = action.test(c, m);
-            if (res)
-                logger.log(Level.INFO, "Consumed: " + m + " from " + c.getId());
-            else
-                logger.log(Level.INFO, "No action on: " + m + " from " + c.getId());
             for (Connection p : peers.values()) {
                 p.tryUpdateQueue(Topic.fromString(m.getKey()));
             }
@@ -154,7 +149,6 @@ public class Node {
         ContactRequest contactRequest = (ContactRequest) msg;
             Integer node = c.getId();
             if (node == -1) return false; // drop message
-//            System.out.println("I received a contact request from " + node + " message was: " + contactRequest);
             Metadata metadata = db.get(msg.getKey()).getMetadata();
             if (db.get(msg.getKey()).getMetadata().state == State.Waiting) {
                 if (node > serverSocket.getMyId()) {
@@ -174,7 +168,6 @@ public class Node {
                     }
                     return true;
                 } else {
-                   logger.log(Level.INFO, "I'm the coordinator, ignoring contact request for now");
                     return false;
                 }
             } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
