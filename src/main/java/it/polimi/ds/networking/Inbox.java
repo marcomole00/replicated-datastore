@@ -8,10 +8,9 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.*;
 import java.util.function.BiPredicate;
-import java.util.logging.Level;
 
 public class Inbox {
-    private final List<Pair<Integer, Message>> queue = new LinkedList<>();
+    private final List<Message> queue = new ArrayList<>();
 
     private final BindingSet bindings = new BindingSet();
 
@@ -31,27 +30,26 @@ public class Inbox {
 
     public void updateQueue(Topic topic) {
         int i = 0;
-        List<Pair<Integer, Message>> tmp;
+        List<Message> tmp;
         synchronized (queue) {
             tmp = new ArrayList<>(queue);
         }
         while (i < tmp.size()) {
-            Pair<Integer, Message> p = tmp.get(i);
+            Message m = tmp.get(i);
             synchronized (queue) {
-                if (queue.contains(p)) {
-                    queue.remove(p);
+                if (queue.contains(m)) {
+                    queue.remove(m);
                 } else {
                     i++;
                     continue;
                 }
             }
-            Message m = p.getRight();
             if (matchBindings(m, topic)) {
                 i = 0; // restart and check all messages that are in the queue
             }
             else {
                 synchronized (queue) {
-                    queue.add(0, p);
+                    queue.add(m);
                 }
                 i++;
             }
@@ -128,12 +126,7 @@ public class Inbox {
 
     public void add(Message message) {
         synchronized (queue) {
-            int lastId;
-            if (queue.isEmpty())
-                lastId = 0;
-            else
-                lastId = queue.get(queue.size()-1).getLeft();
-            queue.add(new ImmutablePair<>(lastId+1, message));
+            queue.add(message);
         }
         waitUpdateQueue(Topic.fromString(message.getKey()));
     }
