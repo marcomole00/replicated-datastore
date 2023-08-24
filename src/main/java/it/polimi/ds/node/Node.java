@@ -136,11 +136,7 @@ public class Node {
     }
 
     boolean onAbort(Connection c, Message msg) {
-        logger.log(Level.INFO, "Elaborating on: " + msg + " from " + c.getId()
-        + " my coordinator is " + db.get(msg.getKey()).getMetadata().coordinator);
-       if (Objects.equals(c.getId(), db.get(msg.getKey()).getMetadata().coordinator))
-           changeState(msg.getKey(), State.Idle);
-
+        changeState(msg.getKey(), State.Idle);
         return true;
     }
 
@@ -177,13 +173,6 @@ public class Node {
                 if (node > metadata.coordinator) {
                     c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
                 }
-                else if (node.equals(metadata.coordinator)) {
-                    metadata.contactId = contactRequest.getContactId();
-                    c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
-                    return true;
-
-                }
-
                 return false;
             } else if (db.get(msg.getKey()).getMetadata().state == State.Idle) {
                 metadata.coordinator = node;
