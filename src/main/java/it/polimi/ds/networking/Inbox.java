@@ -127,17 +127,15 @@ public class Inbox {
     }
 
     public void add(Message message) {
-        synchronized (locks.get(Topic.fromString(message.getKey()))) {
-            synchronized (queue) {
-                int lastId;
-                if (queue.isEmpty())
-                    lastId = 0;
-                else
-                    lastId = queue.get(queue.size()-1).getLeft();
-                queue.add(new ImmutablePair<>(lastId+1, message));
-            }
-            waitUpdateQueue(Topic.fromString(message.getKey()));
+        synchronized (queue) {
+            int lastId;
+            if (queue.isEmpty())
+                lastId = 0;
+            else
+                lastId = queue.get(queue.size()-1).getLeft();
+            queue.add(new ImmutablePair<>(lastId+1, message));
         }
+        waitUpdateQueue(Topic.fromString(message.getKey()));
     }
 
     public String printQueue() {
