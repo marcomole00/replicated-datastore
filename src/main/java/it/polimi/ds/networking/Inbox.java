@@ -3,13 +3,14 @@ package it.polimi.ds.networking;
 import it.polimi.ds.networking.messages.Message;
 import it.polimi.ds.networking.messages.Presentation;
 import it.polimi.ds.utils.SafeLogger;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.*;
 import java.util.function.BiPredicate;
-import java.util.logging.Level;
 
 public class Inbox {
-    private final List<Message> queue = new LinkedList<>();
+    private final List<Message> queue = new ArrayList<>();
 
     private final BindingSet bindings = new BindingSet();
 
@@ -19,7 +20,7 @@ public class Inbox {
 
     private final LockSet locks;
 
-    private boolean checking = false;
+    private final List<Boolean> checking = new ArrayList<>(Collections.nCopies(1, false));
 
     public  Inbox(SafeLogger logger, Connection connection, LockSet locks) {
         this.logger = logger;
@@ -28,35 +29,62 @@ public class Inbox {
     }
 
     public void updateQueue(Topic topic) {
+        int i = 0;
+        List<Message> tmp;
         synchronized (queue) {
-            if (checking)
-                return;
-            checking = true;
-            Message processed;
-            do {
-                processed = null;
-                int i = 0;
-                while (i < queue.size()) {
-                    Message m = queue.get(i);
-                    queue.remove(i);
-                    if (matchBindings(m, topic)) {
-                        processed = m;
-                        break;
-                    }
-                    else {
-                        queue.add(i, m);
-                        i++;
-                    }
+            tmp = new ArrayList<>(queue);
+        }
+        while (i < tmp.size()) {
+            Message m = tmp.get(i);
+            synchronized (queue) {
+                if (queue.contains(m)) {
+                    queue.remove(m);
+                } else {
+                    i++;
+                    continue;
                 }
-            } while (processed != null);
-            checking = false;
+            }
+            if (matchBindings(m, topic)) {
+                i = 0; // restart and check all messages that are in the queue
+            }
+            else {
+                synchronized (queue) {
+                    queue.add(m);
+                }
+                i++;
+            }
         }
     }
 
-    public void bindCheckPrevious(MessageFilter filter, BiPredicate<Connection, Message> action) {
-        synchronized (locks.get(filter.getTopic())) {
-            bind(filter, action);
-            updateQueue(filter.getTopic());
+    public void tryUpdateQueue(Topic topic) {
+        synchronized (checking) {
+            if (checking.get(0))
+                return;
+            else
+                checking.set(0, true);
+        }
+        updateQueue(topic);
+        synchronized (checking) {
+            checking.set(0, false);
+            checking.notifyAll();
+        }
+    }
+
+    public void waitUpdateQueue(Topic topic) {
+        synchronized (checking) {
+            while (checking.get(0)) {
+                try {
+                    checking.wait();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            checking.set(0, true);
+        }
+        updateQueue(topic);
+        synchronized (checking) {
+            checking.set(0, false);
+            checking.notifyAll();
         }
     }
 
@@ -97,12 +125,10 @@ public class Inbox {
     }
 
     public void add(Message message) {
-        synchronized (locks.get(Topic.fromString(message.getKey()))) {
-            synchronized (queue) {
-                queue.add(message);
-                updateQueue(Topic.fromString(message.getKey()));
-            }
+        synchronized (queue) {
+            queue.add(message);
         }
+        waitUpdateQueue(Topic.fromString(message.getKey()));
     }
 
     public String printQueue() {

@@ -129,13 +129,17 @@ public class Node {
         return (c,m)-> {
             boolean res = action.test(c, m);
             for (Connection p : peers.values()) {
-                p.updateQueue(Topic.fromString(m.getKey()));
+                p.tryUpdateQueue(Topic.fromString(m.getKey()));
             }
             return res;
         };
     }
 
     boolean onAbort(Connection c, Message msg) {
+        Abort abort = (Abort) msg;
+        Metadata metadata = db.get(abort.getKey()).getMetadata();
+        if (abort.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
+            return false;
         changeState(msg.getKey(), State.Idle);
         return true;
     }
@@ -143,10 +147,8 @@ public class Node {
     boolean onContactRequest(Connection c, Message msg) {
         db.putIfNotPresent(msg.getKey());
         ContactRequest contactRequest = (ContactRequest) msg;
-        logger.log(Level.INFO, "Elaborating on: " + contactRequest + " from " + c.getId());
             Integer node = c.getId();
             if (node == -1) return false; // drop message
-//            System.out.println("I received a contact request from " + node + " message was: " + contactRequest);
             Metadata metadata = db.get(msg.getKey()).getMetadata();
             if (db.get(msg.getKey()).getMetadata().state == State.Waiting) {
                 if (node > serverSocket.getMyId()) {
@@ -166,7 +168,6 @@ public class Node {
                     }
                     return true;
                 } else {
-                   logger.log(Level.INFO, "I'm the coordinator, ignoring contact request for now");
                     return false;
                 }
             } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
@@ -186,7 +187,6 @@ public class Node {
 
     boolean onContactResponse(Connection ignored, Message msg) {
         ContactResponse contactResponse = (ContactResponse) msg;
-        logger.log(Level.INFO, "Elaborating on: " + contactResponse);
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (contactResponse.getContactId() != metadata.contactId) {
             logger.log(Level.INFO, "dropping contact response," +
@@ -198,7 +198,7 @@ public class Node {
         if (contactResponse.getVersion() > metadata.writeMaxVersion)
             metadata.writeMaxVersion = contactResponse.getVersion();
         if (metadata.ackCounter == config.getWriteQuorum()-1) {
-            Write write = new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1);
+            Write write = new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1, metadata.contactId);
             PutResponse putResponse = new PutResponse(msg.getKey(), metadata.writeMaxVersion+1);
             changeState(contactResponse.getKey(), State.Committed);
             db.get(msg.getKey()).setValue(write.getValue());
@@ -234,7 +234,6 @@ public class Node {
 
     boolean onNack(Connection ignored, Message msg) {
         Nack nack = (Nack) msg;
-        logger.log(Level.INFO, "Elaborating on: " + nack);
         if (nack.getContactId() != db.get(msg.getKey()).getMetadata().contactId)
             return true; // drop message
         if (nack.getNodeID() >= serverSocket.myId + config.getWriteQuorum())
@@ -244,7 +243,7 @@ public class Node {
 
     boolean onPutRequest(Connection c, Message msg) {
         PutRequest putRequest = (PutRequest) msg;
-        logger.log(Level.INFO, "Elaborating on: " + putRequest);
+        logger.log(Level.INFO, "Executing: " + putRequest + " from " + c.getId());
         db.putIfNotPresent(msg.getKey());
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (metadata.state != State.Idle) {
@@ -264,7 +263,6 @@ public class Node {
     }
 
     boolean onRead(Connection c, Message msg) {
-        logger.log(Level.INFO, "Elaborating on: " +  (Read) msg);
         db.putIfNotPresent(msg.getKey());
         Entry  entry = db.get(msg.getKey());
         String value = entry.getValue();
@@ -275,7 +273,6 @@ public class Node {
 
     boolean onReadResponse(Connection ignored, Message msg) {
         ReadResponse readResponse = (ReadResponse) msg;
-        logger.log(Level.INFO, "Elaborating on: " + readResponse);
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         metadata.readCounter++;
         if (readResponse.getVersion() > metadata.readMaxVersion) {
@@ -294,9 +291,11 @@ public class Node {
         return true;
     }
 
-    boolean onWrite(Connection ignored, Message msg) {
+    boolean onWrite(Connection c, Message msg) {
         Write write = (Write) msg;
-        logger.log(Level.INFO, "Elaborating on: " + write);
+        Metadata metadata = db.get(write.getKey()).getMetadata();
+        if (write.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
+            return false;
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
 
