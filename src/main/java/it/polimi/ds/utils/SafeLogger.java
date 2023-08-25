@@ -3,21 +3,23 @@ package it.polimi.ds.utils;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class SafeLogger {
+public class SafeLogger  {
     private final Logger innerLogger;
-    private SafeLogger(String name) {
+    private boolean debug;
+    private SafeLogger(String name, boolean debug) {
         innerLogger = Logger.getLogger(name);
+        this.debug = debug;
     }
 
-    public static SafeLogger getLogger(String name) {
-        return new SafeLogger(name);
+    public static SafeLogger getLogger(String name, boolean debug) {
+        return new SafeLogger(name, debug);
     }
 
     public synchronized void log(Level level, String message) {
-        innerLogger.log(level, message);
+        if (debug) innerLogger.log(level, message);
     }
 
     public synchronized void log(Level level, String message, Throwable thrown) {
-        innerLogger.log(level, message, thrown);
+       if (debug) innerLogger.log(level, message, thrown);
     }
 }

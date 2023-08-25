@@ -1,25 +1,31 @@
 package it.polimi.ds.node;
 
-import it.polimi.ds.networking.*;
-import it.polimi.ds.networking.messages.*;
+import it.polimi.ds.networking.Address;
+import it.polimi.ds.networking.Connection;
+import it.polimi.ds.networking.MessageFilter;
+import it.polimi.ds.networking.Topic;
+import it.polimi.ds.networking.messages.ContactRequest;
+import it.polimi.ds.networking.messages.Presentation;
+import it.polimi.ds.networking.messages.Read;
+import it.polimi.ds.networking.messages.ReadResponse;
 import it.polimi.ds.utils.SafeLogger;
 import it.polimi.ds.utils.Topology;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PeerConnector implements  Runnable{
 
 
-    private final HashMap<Integer, Connection> peers;
+    private final ConcurrentHashMap<Integer, Connection> peers;
     private final Topology topology;
 
-    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
+    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName() ,false);
     int myId;
 
     private int accepted_connections = 0;
     Node node;
 
-    public PeerConnector(HashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
+    public PeerConnector(ConcurrentHashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
             this.peers = peers;
             this.topology = topology;
             this.myId = id;

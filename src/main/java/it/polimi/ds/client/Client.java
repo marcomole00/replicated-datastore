@@ -1,7 +1,10 @@
 package it.polimi.ds.client;
 
 import it.polimi.ds.exceptions.ConfigurationException;
-import it.polimi.ds.networking.*;
+import it.polimi.ds.networking.Address;
+import it.polimi.ds.networking.Connection;
+import it.polimi.ds.networking.MessageFilter;
+import it.polimi.ds.networking.Topic;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.Config;
 import it.polimi.ds.utils.SafeLogger;
@@ -16,9 +19,11 @@ public class Client {
 
     BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
     Boolean running = true;
-    SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
+    SafeLogger logger = SafeLogger.getLogger(this.getClass().getName(),true);
 
     Topology topology = new Topology();
+
+
 
     public void run() throws IOException, ConfigurationException {
         topology = new Config().getTopology();
@@ -107,6 +112,7 @@ public class Client {
 
 
     void round_robin_put_test(int number_of_operations, int milliseconds_of_idle, int same_key){
+
         for (int i = 0; i < number_of_operations; i++) {
             try {
 

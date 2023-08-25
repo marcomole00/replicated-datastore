@@ -1,6 +1,9 @@
 package it.polimi.ds.node;
 
-import it.polimi.ds.networking.*;
+import it.polimi.ds.networking.Connection;
+import it.polimi.ds.networking.LockSet;
+import it.polimi.ds.networking.MessageFilter;
+import it.polimi.ds.networking.Topic;
 import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.Config;
 import it.polimi.ds.utils.OperationLogger;
@@ -9,18 +12,19 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.Socket;
-import java.util.*;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
 
 public class Node {
 
-    private final  HashMap<Integer, Connection> peers = new HashMap<>();
+    private final ConcurrentHashMap<Integer, Connection> peers = new ConcurrentHashMap<>();
 
     SafeCounter contactCounter = new SafeCounter();
 
-    SafeLogger logger = SafeLogger.getLogger(this.getClass().getName());
+    SafeLogger logger;
 
     OperationLogger operationLogger;
 
@@ -34,9 +38,10 @@ public class Node {
 
     private final LockSet locks = new LockSet();
 
-    public void run() throws Exception {
+    public void run(boolean debug) throws Exception {
         //for each node in the topology create a connection
         //start the server socket
+        logger = SafeLogger.getLogger(this.getClass().getName(), debug);
         config = new Config();
         serverSocket = new AutoDiscoverSocket(config);
         operationLogger = new OperationLogger(serverSocket.getMyId());
@@ -298,10 +303,6 @@ public class Node {
             return false;
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
-
-      // on Write dovrebbe essere accettata anche fuori da Ready
-        // se viene accettata fuori da ready però lo stato non deve tornare ad idle
-
         changeState(write.getKey(), State.Idle);
         operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         return true;
