@@ -28,6 +28,10 @@ public class Inbox {
 
     public void updateQueue(Topic topic) {
         int i = 0;
+        List<Map.Entry<MessageFilter, BiPredicate<Connection, Message>>> relatedBindings;
+        synchronized (locks.get(topic)) {
+            relatedBindings = bindings.getMatchList(topic);
+        }
         List<Message> tmp;
         synchronized (queue) {
             tmp = new ArrayList<>(queue);
@@ -42,7 +46,10 @@ public class Inbox {
                     continue;
                 }
             }
-            if (matchBindings(m, topic)) {
+            if (matchBindings(m, relatedBindings)) {
+                synchronized (locks.get(topic)) {
+                    relatedBindings = bindings.getMatchList(topic);
+                }
                 i = 0; // restart and check all messages that are in the queue
             }
             else {
@@ -100,8 +107,8 @@ public class Inbox {
         }
     }
 
-    Boolean matchBindings(Message m, Topic topic) {
-        for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : bindings.getMatchList(topic)) { // always match messages also against topic "any"
+    Boolean matchBindings(Message m, List<Map.Entry<MessageFilter, BiPredicate<Connection, Message>>> relatedBindings) {
+        for (Map.Entry<MessageFilter, BiPredicate<Connection, Message>> b : relatedBindings) { // always match messages also against topic "any"
             if(b.getKey().match(m)) {  // getKey extracts the MessageFilter
                 return b.getValue().test(connection, m);
             }
