@@ -115,14 +115,10 @@ public class Node {
         }
         else {
             for (Connection c : peers.values()) {
-                if (newState == State.Idle) {
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), decoratedCallback(this::onContactRequest));
-                } else if (newState == State.Ready) {
+                if (newState == State.Ready) {
                     c.bind(new MessageFilter(Topic.fromString(key), Abort.class), decoratedCallback(this::onAbort));
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), decoratedCallback(this::onContactRequest));
                     c.bind(new MessageFilter(Topic.fromString(key), Write.class), decoratedCallback(this::onWrite));
                 } else if (newState == State.Waiting) {
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactRequest.class), decoratedCallback(this::onContactRequest));
                     c.bind(new MessageFilter(Topic.fromString(key), Nack.class), decoratedCallback(this::onNack));
                     c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), decoratedCallback(this::onContactResponse));
                 }
