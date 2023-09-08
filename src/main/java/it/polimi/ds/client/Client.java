@@ -80,6 +80,7 @@ public class Client {
     void put(String key, String value, int node) throws IOException {
         Connection connection = openConnection(node);
         logger.log(Level.INFO, "opened connection with node: " + node + ", socket: " + connection.printSocket());
+        System.out.println("opened connection with node: " + node + ", message: " + new PutRequest(key, value));
         connection.send(new Presentation(-1));
         connection.send(new PutRequest(key, value));
         connection.bind(new MessageFilter(Topic.fromString(key), PutResponse.class), this::logPutResponse);
@@ -88,6 +89,7 @@ public class Client {
     boolean logPutResponse(Connection c, Message msg) {
         PutResponse res = (PutResponse) msg;
         logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
+        System.out.println("Got put  response: " + res);
         c.stop();
         return true;
     }

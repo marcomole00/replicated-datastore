@@ -200,7 +200,7 @@ public class Node {
             metadata.writeMaxVersion = contactResponse.getVersion();
         if (metadata.ackCounter == config.getWriteQuorum()-1) {
             Write write = new Write(msg.getKey(), metadata.toWrite, metadata.writeMaxVersion+1, metadata.contactId);
-            PutResponse putResponse = new PutResponse(msg.getKey(), metadata.writeMaxVersion+1);
+            PutResponse putResponse = new PutResponse(msg.getKey(), metadata.writeMaxVersion+1, metadata.toWrite);
             changeState(contactResponse.getKey(), State.Committed);
             db.get(msg.getKey()).setValue(write.getValue());
             db.get(msg.getKey()).setVersion(write.getVersion());
