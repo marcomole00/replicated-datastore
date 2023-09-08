@@ -4,10 +4,7 @@ import it.polimi.ds.networking.Address;
 import it.polimi.ds.networking.Connection;
 import it.polimi.ds.networking.MessageFilter;
 import it.polimi.ds.networking.Topic;
-import it.polimi.ds.networking.messages.ContactRequest;
-import it.polimi.ds.networking.messages.Presentation;
-import it.polimi.ds.networking.messages.Read;
-import it.polimi.ds.networking.messages.ReadResponse;
+import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 import it.polimi.ds.utils.Topology;
 
@@ -46,6 +43,7 @@ public class PeerConnector implements  Runnable{
                             connection.send(new Presentation(myId));
                             connection.bind(new MessageFilter (Topic.any(), Read.class), node.decoratedCallback(node::onRead));
                             connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node.decoratedCallback(node::onReadResponse));
+                            connection.bind(new MessageFilter (Topic.any(), Write.class), node.decoratedCallback(node::onWrite));
                             connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node.decoratedCallback(node::onContactRequest));
 
 

@@ -86,6 +86,7 @@ public class Node {
                 connection.clearBindings(Topic.any());
                 connection.bind(new MessageFilter(Topic.any(), Read.class), decoratedCallback(this::onRead));
                 connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), decoratedCallback(this::onReadResponse));
+                connection.bind(new MessageFilter(Topic.any(), Write.class), decoratedCallback(this::onWrite));
                 connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), decoratedCallback(this::onContactRequest));
             }
         }
@@ -117,7 +118,6 @@ public class Node {
             for (Connection c : peers.values()) {
                 if (newState == State.Ready) {
                     c.bind(new MessageFilter(Topic.fromString(key), Abort.class), decoratedCallback(this::onAbort));
-                    c.bind(new MessageFilter(Topic.fromString(key), Write.class), decoratedCallback(this::onWrite));
                 } else if (newState == State.Waiting) {
                     c.bind(new MessageFilter(Topic.fromString(key), Nack.class), decoratedCallback(this::onNack));
                     c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), decoratedCallback(this::onContactResponse));
@@ -283,6 +283,9 @@ public class Node {
         if (metadata.readCounter == config.getReadQuorum()-1) {
             metadata.readClient.send(new GetResponse(msg.getKey(), metadata.latestValue, metadata.readMaxVersion));
             metadata.readClient.stop();
+            for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getReadQuorum(); i++) {
+                peers.get(i%config.getNumberOfNodes()).send(new Write(msg.getKey(), metadata.latestValue, metadata.readMaxVersion, -1));
+            }
             metadata.readMaxVersion = -1;
             metadata.latestValue = null;
             metadata.readClient = null;
@@ -295,11 +298,17 @@ public class Node {
     boolean onWrite(Connection c, Message msg) {
         Write write = (Write) msg;
         Metadata metadata = db.get(write.getKey()).getMetadata();
-        if (write.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
-            return false;
+        if (write.getContactId() == -1) {
+            if (db.get(write.getKey()).getVersion() >= write.getVersion())
+                return true; // drop message
+        }
+        else {
+            if (write.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
+                return false;
+            changeState(write.getKey(), State.Idle);
+        }
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
-        changeState(write.getKey(), State.Idle);
         operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         return true;
     }
