@@ -19,6 +19,8 @@ public class Metadata {
 
     public List<Integer> extraContacts = new ArrayList<>();
 
+    public List<Integer> nacked = new ArrayList<>();
+
     public Connection writeClient;
 
     public boolean reading = false;
