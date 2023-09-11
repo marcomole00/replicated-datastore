@@ -2,6 +2,9 @@ package it.polimi.ds.node;
 
 import it.polimi.ds.networking.Connection;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class Metadata {
     public State state = State.Idle;
     public Integer ackCounter = 0;
@@ -13,6 +16,8 @@ public class Metadata {
     public Integer coordinator;
 
     public Integer contactId;
+
+    public List<Integer> extraContacts = new ArrayList<>();
 
     public Connection writeClient;
 

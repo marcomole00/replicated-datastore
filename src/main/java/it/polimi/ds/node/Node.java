@@ -12,8 +12,6 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
@@ -104,13 +102,15 @@ public class Node {
             logger.log(Level.INFO, c.getId() +" inbox:" + c.printQueue());
         }
         logger.log(Level.INFO, "Aborted stack: " + aborted);
-        db.get(key).getMetadata().state = newState;
-        db.get(key).getMetadata().ackCounter = 0;
-        db.get(key).getMetadata().writeMaxVersion = -1;
+        Metadata metadata = db.get(key).getMetadata();
+        metadata.state = newState;
+        metadata.ackCounter = 0;
+        metadata.writeMaxVersion = -1;
+        metadata.extraContacts.clear();
         if(newState == State.Idle ){
-            db.get(key).getMetadata().toWrite = null;
-            db.get(key).getMetadata().coordinator = null;
-            db.get(key).getMetadata().contactId = null;
+            metadata.toWrite = null;
+            metadata.coordinator = null;
+            metadata.contactId = null;
         }
         if (newState == State.Idle && !aborted.isEmpty()) {
             Pair<Connection, PutRequest> p = aborted.pop();
@@ -177,7 +177,7 @@ public class Node {
                 } else {
                     return false;
                 }
-            } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
+            } else if (metadata.state == State.Ready) {
                 if (node > metadata.coordinator) {
                     c.send(new Nack(msg.getKey(), metadata.coordinator, contactRequest.getContactId()));
                 }
@@ -241,10 +241,15 @@ public class Node {
 
     boolean onNack(Connection ignored, Message msg) {
         Nack nack = (Nack) msg;
-        if (nack.getContactId() != db.get(msg.getKey()).getMetadata().contactId)
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        if (nack.getContactId() != metadata.contactId)
             return true; // drop message
-        if ( (nack.getNodeID() >=(serverSocket.myId + config.getWriteQuorum()) - config.getNumberOfNodes()) && nack.getNodeID() < serverSocket.myId)
-            peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), db.get(msg.getKey()).getMetadata().contactId));
+        if ( (nack.getNodeID() >=(serverSocket.myId + config.getWriteQuorum()) - config.getNumberOfNodes()) && nack.getNodeID() < serverSocket.myId) {
+            if (metadata.extraContacts.contains(nack.getNodeID())) // avoid repetitions
+                return true; // drop message
+            metadata.extraContacts.add(nack.getNodeID());
+            peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), metadata.contactId));
+        }
         return true;
     }
 
