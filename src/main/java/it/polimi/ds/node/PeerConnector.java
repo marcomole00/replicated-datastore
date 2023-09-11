@@ -16,7 +16,7 @@ public class PeerConnector implements  Runnable{
     private final ConcurrentHashMap<Integer, Connection> peers;
     private final Topology topology;
 
-    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName() ,false);
+    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName() ,true);
     int myId;
 
     private int accepted_connections = 0;

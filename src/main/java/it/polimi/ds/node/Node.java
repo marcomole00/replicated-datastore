@@ -12,6 +12,8 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
@@ -37,6 +39,9 @@ public class Node {
     AbortedStack aborted = new AbortedStack();
 
     private final LockSet locks = new LockSet();
+
+    // key, connectionId, ContactId
+    private final Map<String, Map<Integer, Integer>> lastNack = new ConcurrentHashMap<>();
 
     public void run(boolean debug) throws Exception {
         //for each node in the topology create a connection
@@ -139,6 +144,9 @@ public class Node {
     boolean onAbort(Connection c, Message msg) {
         Abort abort = (Abort) msg;
         Metadata metadata = db.get(abort.getKey()).getMetadata();
+
+        if (metadata.contactId == null) return false; // even though this should not happen
+
         if (abort.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
             return false;
         changeState(msg.getKey(), State.Idle);
@@ -153,6 +161,7 @@ public class Node {
             Metadata metadata = db.get(msg.getKey()).getMetadata();
             if (db.get(msg.getKey()).getMetadata().state == State.Waiting) {
                 if (node > serverSocket.getMyId()) {
+                    logger.log(Level.INFO, "im aborting, my new coord  is " + node);
                     changeState(msg.getKey(), State.Aborted);
                     for (int i = serverSocket.getMyId() + 1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
                         peers.get(i % config.getNumberOfNodes()).send(new Abort(msg.getKey(), metadata.contactId ));
@@ -162,7 +171,7 @@ public class Node {
                     metadata.contactId = contactRequest.getContactId();
                     if(serverSocket.getMyId() < node + config.getWriteQuorum() - config.getNumberOfNodes()) {
                         changeState(msg.getKey(), State.Ready);
-                        c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
+                        c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), contactRequest.getContactId()));
                     }
                     else {
                         changeState(msg.getKey(), State.Idle);
@@ -173,14 +182,31 @@ public class Node {
                 }
             } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
                 if (node > metadata.coordinator) {
-                    c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
+                    logger.log(Level.INFO, "Sending nack because of " + msg);
+                    // this is done too much, find a way to decrease the amount of nack sent
+                    int last_contactId;
+                    if( !lastNack.containsKey(msg.getKey())) lastNack.put(contactRequest.getKey(), new HashMap<>());
+                    if (!lastNack.get(msg.getKey()).containsKey(c.getId())) {
+                        lastNack.get(msg.getKey()).put(c.getId(), contactRequest.getContactId());
+                        last_contactId = -1;
+                    }  else {
+                        last_contactId = lastNack.get(msg.getKey()).get(c.getId());
+                    }
+
+
+                    if (last_contactId < contactRequest.getContactId()) {
+                         c.send(new Nack(msg.getKey(), metadata.coordinator, contactRequest.getContactId())); //FIXME
+                         lastNack.get(msg.getKey()).put(c.getId(), contactRequest.getContactId());
+                     }
+
+                    System.out.println("sending nack to" + c.getId());
                 }
                 return false;
             } else if (db.get(msg.getKey()).getMetadata().state == State.Idle) {
                 metadata.coordinator = node;
                 changeState(msg.getKey(), State.Ready);
                 metadata.contactId = contactRequest.getContactId();
-                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
+                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), contactRequest.getContactId()));
                 return true;
             }
             return false; // if state is Committed or Aborted don't consume the message
@@ -237,8 +263,8 @@ public class Node {
         Nack nack = (Nack) msg;
         if (nack.getContactId() != db.get(msg.getKey()).getMetadata().contactId)
             return true; // drop message
-        if (nack.getNodeID() >= serverSocket.myId + config.getWriteQuorum())
-            peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), nack.getContactId()));
+        if ( (nack.getNodeID() >=(serverSocket.myId + config.getWriteQuorum()) - config.getNumberOfNodes()) && nack.getNodeID() < serverSocket.myId)
+            peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), db.get(msg.getKey()).getMetadata().contactId));
         return true;
     }
 
@@ -257,6 +283,7 @@ public class Node {
         metadata.writeMaxVersion = db.get(msg.getKey()).getVersion();
         metadata.writeClient = c;
         metadata.contactId = contactCounter.getAndIncrement();
+        logger.log(Level.INFO, "sending contact request because of"+ msg);
         for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
             peers.get(i % config.getNumberOfNodes()).send(new ContactRequest(msg.getKey(), metadata.contactId));
         }

@@ -87,7 +87,8 @@ public class Client {
 
     boolean logPutResponse(Connection c, Message msg) {
         PutResponse res = (PutResponse) msg;
-        logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
+       // logger.log(Level.INFO, "Successfully put value with version " + res.getVersion());
+        System.out.println("succefully "+ msg);
         c.stop();
         return true;
     }
