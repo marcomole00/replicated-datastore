@@ -40,9 +40,6 @@ public class Node {
 
     private final LockSet locks = new LockSet();
 
-    // key, connectionId, ContactId
-    private final Map<String, Map<Integer, Integer>> lastNack = new ConcurrentHashMap<>();
-
     public void run(boolean debug) throws Exception {
         //for each node in the topology create a connection
         //start the server socket
@@ -182,24 +179,7 @@ public class Node {
                 }
             } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
                 if (node > metadata.coordinator) {
-                    logger.log(Level.INFO, "Sending nack because of " + msg);
-                    // this is done too much, find a way to decrease the amount of nack sent
-                    int last_contactId;
-                    if( !lastNack.containsKey(msg.getKey())) lastNack.put(contactRequest.getKey(), new HashMap<>());
-                    if (!lastNack.get(msg.getKey()).containsKey(c.getId())) {
-                        lastNack.get(msg.getKey()).put(c.getId(), contactRequest.getContactId());
-                        last_contactId = -1;
-                    }  else {
-                        last_contactId = lastNack.get(msg.getKey()).get(c.getId());
-                    }
-
-
-                    if (last_contactId < contactRequest.getContactId()) {
-                         c.send(new Nack(msg.getKey(), metadata.coordinator, contactRequest.getContactId())); //FIXME
-                         lastNack.get(msg.getKey()).put(c.getId(), contactRequest.getContactId());
-                     }
-
-                    System.out.println("sending nack to" + c.getId());
+                    c.send(new Nack(msg.getKey(), metadata.coordinator, contactRequest.getContactId()));
                 }
                 return false;
             } else if (db.get(msg.getKey()).getMetadata().state == State.Idle) {
