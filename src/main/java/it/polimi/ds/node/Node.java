@@ -17,7 +17,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
 
@@ -211,11 +210,7 @@ public class Node {
 
             return true; // drop message
         }
-        Integer node = c.getId();
-        if ((node - serverSocket.myId + config.getNumberOfNodes()) % config.getNumberOfNodes() < config.getWriteQuorum()) {
-            metadata.ackCounter++;
-            logger.log(Level.INFO, "incrementing for node " + node);
-        }
+        metadata.ackCounter++;
         if (contactResponse.getVersion() > metadata.writeMaxVersion)
             metadata.writeMaxVersion = contactResponse.getVersion();
         if (metadata.ackCounter == config.getWriteQuorum()-1) {
