@@ -22,16 +22,13 @@ public class PeerConnector implements  Runnable{
 
     private int accepted_connections = 0;
 
-    private final Consumer<String> fullUpdate;
-
     Node node;
 
-    public PeerConnector(ConcurrentHashMap<Integer, Connection> peers, Topology topology, int id, Node node, Consumer<String> fullUpdate) {
+    public PeerConnector(ConcurrentHashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
             this.peers = peers;
             this.topology = topology;
             this.myId = id;
             this.node = node;
-            this.fullUpdate = fullUpdate;
         }
 
         @Override
@@ -42,14 +39,14 @@ public class PeerConnector implements  Runnable{
                     for (int i = myId+1; i < topology.getNodes().size(); i++) {
                         if (!peers.containsKey(i)) {
                             Address address = topology.getNodes().get(i);
-                            Connection connection = Connection.fromAddress(address, logger, node.getLocks(), fullUpdate);
+                            Connection connection = Connection.fromAddress(address, logger, node.getLocks(), node::fullUpdate);
                             accepted_connections++;
                             connection.setId(i);
                             connection.send(new Presentation(myId));
-                            connection.bind(new MessageFilter (Topic.any(), Read.class), node.decoratedCallback(node::onRead));
-                            connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node.decoratedCallback(node::onReadResponse));
-                            connection.bind(new MessageFilter (Topic.any(), Write.class), node.decoratedCallback(node::onWrite));
-                            connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node.decoratedCallback(node::onContactRequest));
+                            connection.bind(new MessageFilter (Topic.any(), Read.class), node::onRead);
+                            connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);
+                            connection.bind(new MessageFilter (Topic.any(), Write.class), node::onWrite);
+                            connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node::onContactRequest);
 
 
                             System.out.println(myId + " Connecting to " + i);

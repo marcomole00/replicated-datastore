@@ -50,7 +50,7 @@ public class Node {
         config = new Config();
         serverSocket = new AutoDiscoverSocket(config);
         operationLogger = new OperationLogger(serverSocket.getMyId());
-        PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this, this::fullUpdate);
+        PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this);
         Thread connectorThread = new Thread(peerConnector);
         connectorThread.start();
 
@@ -63,7 +63,7 @@ public class Node {
                     continue;
                 }
                 Connection connection = Connection.fromSocket(socket, logger, locks, this::fullUpdate);
-                connection.bind(new MessageFilter(Topic.any(), Presentation.class), decoratedCallback(this::onPresentation));
+                connection.bind(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -79,8 +79,8 @@ public class Node {
 
         if ( p.getId() < 0) {
             connection.clearBindings(Topic.any());
-            connection.bind(new MessageFilter(Topic.any(), GetRequest.class), decoratedCallback(this::onGetRequest));
-            connection.bind(new MessageFilter(Topic.any(), PutRequest.class), decoratedCallback(this::onPutRequest));
+            connection.bind(new MessageFilter(Topic.any(), GetRequest.class), this::onGetRequest);
+            connection.bind(new MessageFilter(Topic.any(), PutRequest.class), this::onPutRequest);
             connection.setId(-1);
             clients.add(connection);
         }
@@ -90,10 +90,10 @@ public class Node {
                 System.out.println("Received connection from " + p.getId());
                 connection.setId(p.getId());
                 connection.clearBindings(Topic.any());
-                connection.bind(new MessageFilter(Topic.any(), Read.class), decoratedCallback(this::onRead));
-                connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), decoratedCallback(this::onReadResponse));
-                connection.bind(new MessageFilter(Topic.any(), Write.class), decoratedCallback(this::onWrite));
-                connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), decoratedCallback(this::onContactRequest));
+                connection.bind(new MessageFilter(Topic.any(), Read.class), this::onRead);
+                connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
+                connection.bind(new MessageFilter(Topic.any(), Write.class), this::onWrite);
+                connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), this::onContactRequest);
             }
         }
         return true;
@@ -126,10 +126,10 @@ public class Node {
         else {
             for (Connection c : peers.values()) {
                 if (newState == State.Ready) {
-                    c.bind(new MessageFilter(Topic.fromString(key), Abort.class), decoratedCallback(this::onAbort));
+                    c.bind(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort);
                 } else if (newState == State.Waiting) {
-                    c.bind(new MessageFilter(Topic.fromString(key), Nack.class), decoratedCallback(this::onNack));
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), decoratedCallback(this::onContactResponse));
+                    c.bind(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack);
+                    c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse);
                 }
             }
         }
@@ -147,17 +147,6 @@ public class Node {
                 change = change || c.waitUpdateQueue(Topic.fromString(key));
             }
         } while (change);
-    }
-
-    BiPredicate<Connection, Message> decoratedCallback(BiPredicate<Connection, Message> action) {
-        return (c,m)-> {
-            logger.log(Level.INFO, "Processing: " + m + " from " + c.getId());
-            boolean res = action.test(c, m);
-            if (res) {
-                logger.log(Level.INFO, "Consumed: " + m + " from " + c.getId());
-            }
-            return res;
-        };
     }
 
     boolean onAbort(Connection c, Message msg) {
