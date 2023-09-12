@@ -12,6 +12,9 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
@@ -21,6 +24,8 @@ import java.util.logging.Level;
 public class Node {
 
     private final ConcurrentHashMap<Integer, Connection> peers = new ConcurrentHashMap<>();
+
+    private final List<Connection> clients = Collections.synchronizedList(new ArrayList<>());
 
     SafeCounter contactCounter = new SafeCounter();
 
@@ -45,7 +50,7 @@ public class Node {
         config = new Config();
         serverSocket = new AutoDiscoverSocket(config);
         operationLogger = new OperationLogger(serverSocket.getMyId());
-        PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this);
+        PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this, this::fullUpdate);
         Thread connectorThread = new Thread(peerConnector);
         connectorThread.start();
 
@@ -57,7 +62,7 @@ public class Node {
                     logger.log(Level.WARNING ,"Received connection from unknown address " + socket.getInetAddress().getHostAddress());
                     continue;
                 }
-                Connection connection = Connection.fromSocket(socket, logger, locks);
+                Connection connection = Connection.fromSocket(socket, logger, locks, this::fullUpdate);
                 connection.bind(new MessageFilter(Topic.any(), Presentation.class), decoratedCallback(this::onPresentation));
             } catch (Exception e) {
                 e.printStackTrace();
@@ -77,6 +82,7 @@ public class Node {
             connection.bind(new MessageFilter(Topic.any(), GetRequest.class), decoratedCallback(this::onGetRequest));
             connection.bind(new MessageFilter(Topic.any(), PutRequest.class), decoratedCallback(this::onPutRequest));
             connection.setId(-1);
+            clients.add(connection);
         }
         else if (0 <= p.getId() && p.getId() < config.getNumberOfNodes()) {
             synchronized (peers) {
@@ -129,15 +135,26 @@ public class Node {
         }
     }
 
+    void fullUpdate(String key) {
+        boolean change;
+        do {
+            change = false;
+            for (Connection p : peers.values()) {
+                change = change || p.waitUpdateQueue(Topic.fromString(key));
+            }
+            List<Connection> tmp = new ArrayList<>(clients);
+            for (Connection c : tmp) {
+                change = change || c.waitUpdateQueue(Topic.fromString(key));
+            }
+        } while (change);
+    }
+
     BiPredicate<Connection, Message> decoratedCallback(BiPredicate<Connection, Message> action) {
         return (c,m)-> {
             logger.log(Level.INFO, "Processing: " + m + " from " + c.getId());
             boolean res = action.test(c, m);
             if (res) {
                 logger.log(Level.INFO, "Consumed: " + m + " from " + c.getId());
-                for (Connection p : peers.values()) {
-                    p.tryUpdateQueue(Topic.fromString(m.getKey()));
-                }
             }
             return res;
         };
@@ -224,6 +241,7 @@ public class Node {
             metadata.extraContacts.forEach((i) -> peers.get(i).send(write));
             metadata.writeClient.send(putResponse);
             metadata.writeClient.stop();
+            clients.remove(metadata.writeClient);
             changeState(contactResponse.getKey(), State.Idle);
             operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         }
