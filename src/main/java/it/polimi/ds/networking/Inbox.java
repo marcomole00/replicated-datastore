@@ -31,29 +31,18 @@ public class Inbox {
     public boolean updateQueue(Topic topic) {
         int i = 0;
         boolean result = false;
-        List<Message> tmp;
         synchronized (queue) {
-            tmp = new ArrayList<>(queue);
-        }
-        while (i < tmp.size()) {
-            Message m = tmp.get(i);
-            synchronized (queue) {
-                if (queue.contains(m)) {
-                    queue.remove(m);
-                } else {
+            while (i < queue.size()) {
+                Message m = queue.get(i);
+                queue.remove(m);
+                if (matchBindings(m, bindings.getMatchList(topic))) {
+                    result = true;
+                }
+                else {
+                    queue.add(i, m);
                     i++;
-                    continue;
                 }
             }
-            if (matchBindings(m, bindings.getMatchList(topic))) {
-                result = true;
-            }
-            else {
-                synchronized (queue) {
-                    queue.add(m);
-                }
-            }
-            i++;
         }
         return result;
     }
