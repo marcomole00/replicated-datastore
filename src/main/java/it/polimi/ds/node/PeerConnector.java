@@ -9,7 +9,6 @@ import it.polimi.ds.utils.SafeLogger;
 import it.polimi.ds.utils.Topology;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 public class PeerConnector implements  Runnable{
 
@@ -17,18 +16,19 @@ public class PeerConnector implements  Runnable{
     private final ConcurrentHashMap<Integer, Connection> peers;
     private final Topology topology;
 
-    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName() ,true);
+    private final SafeLogger logger;
     int myId;
 
     private int accepted_connections = 0;
 
     Node node;
 
-    public PeerConnector(ConcurrentHashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
+    public PeerConnector(ConcurrentHashMap<Integer, Connection> peers, Topology topology, int id, Node node, boolean debug) {
             this.peers = peers;
             this.topology = topology;
             this.myId = id;
             this.node = node;
+            this.logger = SafeLogger.getLogger(this.getClass().getName() ,debug);
         }
 
         @Override

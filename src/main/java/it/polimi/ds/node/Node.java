@@ -49,7 +49,7 @@ public class Node {
         config = new Config();
         serverSocket = new AutoDiscoverSocket(config);
         operationLogger = new OperationLogger(serverSocket.getMyId());
-        PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this);
+        PeerConnector peerConnector = new PeerConnector(peers, config.getTopology(), serverSocket.getMyId(), this,debug);
         Thread connectorThread = new Thread(peerConnector);
         connectorThread.start();
 
