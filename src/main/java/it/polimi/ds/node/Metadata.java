@@ -1,6 +1,7 @@
 package it.polimi.ds.node;
 
 import it.polimi.ds.networking.Connection;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,7 +20,7 @@ public class Metadata {
 
     public List<Integer> extraContacts = new ArrayList<>();
 
-    public List<Integer> nacked = new ArrayList<>();
+    public List<Pair<Integer, Integer>> nacked = new ArrayList<>();
 
     public Connection writeClient;
 

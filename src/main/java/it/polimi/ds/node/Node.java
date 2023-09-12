@@ -131,12 +131,13 @@ public class Node {
 
     BiPredicate<Connection, Message> decoratedCallback(BiPredicate<Connection, Message> action) {
         return (c,m)-> {
+            logger.log(Level.INFO, "Processing: " + m + " from " + c.getId());
             boolean res = action.test(c, m);
             if (res) {
-                logger.log(Level.INFO, "Consumed: " + m);
-            }
-            for (Connection p : peers.values()) {
-                p.tryUpdateQueue(Topic.fromString(m.getKey()));
+                logger.log(Level.INFO, "Consumed: " + m + " from " + c.getId());
+                for (Connection p : peers.values()) {
+                    p.tryUpdateQueue(Topic.fromString(m.getKey()));
+                }
             }
             return res;
         };
@@ -179,8 +180,9 @@ public class Node {
                     return false;
                 }
             } else if (metadata.state == State.Ready) {
-                if (node > metadata.coordinator && !metadata.nacked.contains(node)) {
-                    metadata.nacked.add(node);
+                Pair<Integer, Integer> p = new ImmutablePair<>(node, contactRequest.getContactId());
+                if (node > metadata.coordinator && !metadata.nacked.contains(p)) {
+                    metadata.nacked.add(p);
                     c.send(new Nack(msg.getKey(), metadata.coordinator, contactRequest.getContactId()));
                 }
                 return false;
