@@ -6,6 +6,7 @@ import it.polimi.ds.utils.SafeLogger;
 
 import java.util.*;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 
 public class Inbox {
     private final List<Message> queue = new ArrayList<>();
@@ -14,83 +15,55 @@ public class Inbox {
 
     private final SafeLogger logger;
 
+    private final Consumer<String> fullUpdate;
+
     private final Connection connection;
 
     private final LockSet locks;
 
-    private final List<Boolean> checking = new ArrayList<>(Collections.nCopies(1, false));
-
-    public  Inbox(SafeLogger logger, Connection connection, LockSet locks) {
+    public  Inbox(SafeLogger logger, Connection connection, LockSet locks,  Consumer<String> fullUpdate) {
         this.logger = logger;
         this.connection = connection;
         this.locks = locks;
+        this.fullUpdate = fullUpdate;
     }
 
-    public void updateQueue(Topic topic) {
+    public boolean updateQueue(Topic topic) {
         int i = 0;
-        List<Map.Entry<MessageFilter, BiPredicate<Connection, Message>>> relatedBindings;
-        synchronized (locks.get(topic)) {
-            relatedBindings = bindings.getMatchList(topic);
-        }
-        List<Message> tmp;
+        boolean result = false;
         synchronized (queue) {
-            tmp = new ArrayList<>(queue);
-        }
-        while (i < tmp.size()) {
-            Message m = tmp.get(i);
-            synchronized (queue) {
-                if (queue.contains(m)) {
-                    queue.remove(m);
-                } else {
+            while (i < queue.size()) {
+                Message m = queue.get(i);
+                queue.remove(m);
+                if (matchBindings(m, bindings.getMatchList(topic))) {
+                    result = true;
+                }
+                else {
+                    queue.add(i, m);
                     i++;
-                    continue;
                 }
-            }
-            if (matchBindings(m, relatedBindings)) {
-                synchronized (locks.get(topic)) {
-                    relatedBindings = bindings.getMatchList(topic);
-                }
-                i = 0; // restart and check all messages that are in the queue
-            }
-            else {
-                synchronized (queue) {
-                    queue.add(m);
-                }
-                i++;
             }
         }
+        return result;
     }
 
-    public void tryUpdateQueue(Topic topic) {
-        synchronized (checking) {
-            if (checking.get(0))
-                return;
-            else
-                checking.set(0, true);
-        }
-        updateQueue(topic);
-        synchronized (checking) {
-            checking.set(0, false);
-            checking.notifyAll();
-        }
-    }
-
-    public void waitUpdateQueue(Topic topic) {
-        synchronized (checking) {
-            while (checking.get(0)) {
+    public boolean waitUpdateQueue(Topic topic) {
+        synchronized (locks.get(topic)) {
+            while (locks.get(topic).get()) {
                 try {
-                    checking.wait();
+                    locks.get(topic).wait();
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
-            checking.set(0, true);
+            locks.get(topic).set(true);
         }
-        updateQueue(topic);
-        synchronized (checking) {
-            checking.set(0, false);
-            checking.notifyAll();
+        boolean result = updateQueue(topic);
+        synchronized (locks.get(topic)) {
+            locks.get(topic).set(false);
+            locks.get(topic).notifyAll();
         }
+        return result;
     }
 
     public void bind(MessageFilter filter, BiPredicate<Connection, Message> action) {
@@ -133,7 +106,14 @@ public class Inbox {
         synchronized (queue) {
             queue.add(message);
         }
-        waitUpdateQueue(Topic.fromString(message.getKey()));
+        if (message instanceof Presentation)
+            waitUpdateQueue(Topic.fromString(message.getKey()));
+        else {
+            if (fullUpdate != null)
+                fullUpdate.accept(message.getKey());
+            else
+                waitUpdateQueue(Topic.fromString(message.getKey()));
+        }
     }
 
     public String printQueue() {

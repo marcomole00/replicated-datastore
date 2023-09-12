@@ -9,6 +9,7 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 public class Connection {
@@ -23,30 +24,30 @@ public class Connection {
 
     private Integer id;
 
-    protected Connection(Socket socket, SafeLogger logger, LockSet locks) throws IOException {
+    protected Connection(Socket socket, SafeLogger logger, LockSet locks, Consumer<String> fullUpdate) throws IOException {
         this.socket = socket;
         writer = new ObjectOutputStream(socket.getOutputStream());
         reader = new ObjectInputStream(socket.getInputStream());
         this.logger = logger;
-        this.inbox = new Inbox(logger, this, locks);
+        this.inbox = new Inbox(logger, this, locks, fullUpdate);
         listenThread = new Thread(this::listenMessages);
         listenThread.start();
     }
 
-    public static Connection fromSocket(Socket socket, SafeLogger logger, LockSet locks) throws IOException {
-        return new Connection(socket, logger, locks);
+    public static Connection fromSocket(Socket socket, SafeLogger logger, LockSet locks, Consumer<String> fullUpdate) throws IOException {
+        return new Connection(socket, logger, locks, fullUpdate);
     }
 
-    public static Connection fromAddress(Address address, SafeLogger logger, LockSet locks) throws IOException {
-        return new Connection(new Socket(address.getIp(), address.getPort()), logger, locks);
+    public static Connection fromAddress(Address address, SafeLogger logger, LockSet locks, Consumer<String> fullUpdate) throws IOException {
+        return new Connection(new Socket(address.getIp(), address.getPort()), logger, locks, fullUpdate);
     }
 
     public static Connection fromAddress(Address address, SafeLogger logger) throws IOException {
-        return fromAddress(address, logger, new LockSet());
+        return fromAddress(address, logger, new LockSet(), null);
     }
 
-    public void tryUpdateQueue(Topic topic) {
-        inbox.tryUpdateQueue(topic);
+    public boolean waitUpdateQueue(Topic topic) {
+        return inbox.waitUpdateQueue(topic);
     }
 
     public void clearBindings(Topic topic) {
@@ -84,6 +85,8 @@ public class Connection {
                 logger.log(Level.SEVERE, toLog);
             } catch (ClassNotFoundException ignored) {}
         }
+        if (getId() != null && getId() != -1)
+            System.out.println(" ");
     }
 
     /**

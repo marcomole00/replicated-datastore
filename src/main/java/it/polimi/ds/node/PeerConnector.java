@@ -4,14 +4,12 @@ import it.polimi.ds.networking.Address;
 import it.polimi.ds.networking.Connection;
 import it.polimi.ds.networking.MessageFilter;
 import it.polimi.ds.networking.Topic;
-import it.polimi.ds.networking.messages.ContactRequest;
-import it.polimi.ds.networking.messages.Presentation;
-import it.polimi.ds.networking.messages.Read;
-import it.polimi.ds.networking.messages.ReadResponse;
+import it.polimi.ds.networking.messages.*;
 import it.polimi.ds.utils.SafeLogger;
 import it.polimi.ds.utils.Topology;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class PeerConnector implements  Runnable{
 
@@ -19,10 +17,11 @@ public class PeerConnector implements  Runnable{
     private final ConcurrentHashMap<Integer, Connection> peers;
     private final Topology topology;
 
-    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName() ,false);
+    private final SafeLogger logger = SafeLogger.getLogger(this.getClass().getName() ,true);
     int myId;
 
     private int accepted_connections = 0;
+
     Node node;
 
     public PeerConnector(ConcurrentHashMap<Integer, Connection> peers, Topology topology, int id, Node node) {
@@ -40,13 +39,14 @@ public class PeerConnector implements  Runnable{
                     for (int i = myId+1; i < topology.getNodes().size(); i++) {
                         if (!peers.containsKey(i)) {
                             Address address = topology.getNodes().get(i);
-                            Connection connection = Connection.fromAddress(address, logger, node.getLocks());
+                            Connection connection = Connection.fromAddress(address, logger, node.getLocks(), node::fullUpdate);
                             accepted_connections++;
                             connection.setId(i);
                             connection.send(new Presentation(myId));
-                            connection.bind(new MessageFilter (Topic.any(), Read.class), node.decoratedCallback(node::onRead));
-                            connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node.decoratedCallback(node::onReadResponse));
-                            connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node.decoratedCallback(node::onContactRequest));
+                            connection.bind(new MessageFilter (Topic.any(), Read.class), node::onRead);
+                            connection.bind(new MessageFilter (Topic.any(), ReadResponse.class), node::onReadResponse);
+                            connection.bind(new MessageFilter (Topic.any(), Write.class), node::onWrite);
+                            connection.bind(new MessageFilter (Topic.any(), ContactRequest.class), node::onContactRequest);
 
 
                             System.out.println(myId + " Connecting to " + i);

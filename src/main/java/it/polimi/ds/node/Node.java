@@ -12,15 +12,19 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiPredicate;
 import java.util.logging.Level;
 
 
 public class Node {
 
     private final ConcurrentHashMap<Integer, Connection> peers = new ConcurrentHashMap<>();
+
+    private final List<Connection> clients = Collections.synchronizedList(new ArrayList<>());
 
     SafeCounter contactCounter = new SafeCounter();
 
@@ -57,8 +61,8 @@ public class Node {
                     logger.log(Level.WARNING ,"Received connection from unknown address " + socket.getInetAddress().getHostAddress());
                     continue;
                 }
-                Connection connection = Connection.fromSocket(socket, logger, locks);
-                connection.bind(new MessageFilter(Topic.any(), Presentation.class), decoratedCallback(this::onPresentation));
+                Connection connection = Connection.fromSocket(socket, logger, locks, this::fullUpdate);
+                connection.bind(new MessageFilter(Topic.any(), Presentation.class), this::onPresentation);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -74,9 +78,10 @@ public class Node {
 
         if ( p.getId() < 0) {
             connection.clearBindings(Topic.any());
-            connection.bind(new MessageFilter(Topic.any(), GetRequest.class), decoratedCallback(this::onGetRequest));
-            connection.bind(new MessageFilter(Topic.any(), PutRequest.class), decoratedCallback(this::onPutRequest));
+            connection.bind(new MessageFilter(Topic.any(), GetRequest.class), this::onGetRequest);
+            connection.bind(new MessageFilter(Topic.any(), PutRequest.class), this::onPutRequest);
             connection.setId(-1);
+            clients.add(connection);
         }
         else if (0 <= p.getId() && p.getId() < config.getNumberOfNodes()) {
             synchronized (peers) {
@@ -84,9 +89,10 @@ public class Node {
                 System.out.println("Received connection from " + p.getId());
                 connection.setId(p.getId());
                 connection.clearBindings(Topic.any());
-                connection.bind(new MessageFilter(Topic.any(), Read.class), decoratedCallback(this::onRead));
-                connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), decoratedCallback(this::onReadResponse));
-                connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), decoratedCallback(this::onContactRequest));
+                connection.bind(new MessageFilter(Topic.any(), Read.class), this::onRead);
+                connection.bind(new MessageFilter(Topic.any(), ReadResponse.class), this::onReadResponse);
+                connection.bind(new MessageFilter(Topic.any(), Write.class), this::onWrite);
+                connection.bind(new MessageFilter(Topic.any(), ContactRequest.class), this::onContactRequest);
             }
         }
         return true;
@@ -101,13 +107,16 @@ public class Node {
             logger.log(Level.INFO, c.getId() +" inbox:" + c.printQueue());
         }
         logger.log(Level.INFO, "Aborted stack: " + aborted);
-        db.get(key).getMetadata().state = newState;
-        db.get(key).getMetadata().ackCounter = 0;
-        db.get(key).getMetadata().writeMaxVersion = -1;
+        Metadata metadata = db.get(key).getMetadata();
+        metadata.state = newState;
+        metadata.ackCounter = 0;
+        metadata.writeMaxVersion = -1;
+        metadata.nacked.clear();
         if(newState == State.Idle ){
-            db.get(key).getMetadata().toWrite = null;
-            db.get(key).getMetadata().coordinator = null;
-            db.get(key).getMetadata().contactId = null;
+            metadata.toWrite = null;
+            metadata.coordinator = null;
+            metadata.contactId = null;
+            metadata.extraContacts.clear();
         }
         if (newState == State.Idle && !aborted.isEmpty()) {
             Pair<Connection, PutRequest> p = aborted.pop();
@@ -116,29 +125,35 @@ public class Node {
         else {
             for (Connection c : peers.values()) {
                 if (newState == State.Ready) {
-                    c.bind(new MessageFilter(Topic.fromString(key), Abort.class), decoratedCallback(this::onAbort));
-                    c.bind(new MessageFilter(Topic.fromString(key), Write.class), decoratedCallback(this::onWrite));
+                    c.bind(new MessageFilter(Topic.fromString(key), Abort.class), this::onAbort);
                 } else if (newState == State.Waiting) {
-                    c.bind(new MessageFilter(Topic.fromString(key), Nack.class), decoratedCallback(this::onNack));
-                    c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), decoratedCallback(this::onContactResponse));
+                    c.bind(new MessageFilter(Topic.fromString(key), Nack.class), this::onNack);
+                    c.bind(new MessageFilter(Topic.fromString(key), ContactResponse.class), this::onContactResponse);
                 }
             }
         }
     }
 
-    BiPredicate<Connection, Message> decoratedCallback(BiPredicate<Connection, Message> action) {
-        return (c,m)-> {
-            boolean res = action.test(c, m);
+    void fullUpdate(String key) {
+        boolean change;
+        do {
+            change = false;
             for (Connection p : peers.values()) {
-                p.tryUpdateQueue(Topic.fromString(m.getKey()));
+                change = change || p.waitUpdateQueue(Topic.fromString(key));
             }
-            return res;
-        };
+            List<Connection> tmp = new ArrayList<>(clients);
+            for (Connection c : tmp) {
+                change = change || c.waitUpdateQueue(Topic.fromString(key));
+            }
+        } while (change);
     }
 
     boolean onAbort(Connection c, Message msg) {
         Abort abort = (Abort) msg;
         Metadata metadata = db.get(abort.getKey()).getMetadata();
+
+        if (metadata.contactId == null) return false; // even though this should not happen
+
         if (abort.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
             return false;
         changeState(msg.getKey(), State.Idle);
@@ -153,40 +168,40 @@ public class Node {
             Metadata metadata = db.get(msg.getKey()).getMetadata();
             if (db.get(msg.getKey()).getMetadata().state == State.Waiting) {
                 if (node > serverSocket.getMyId()) {
+                    logger.log(Level.INFO, "im aborting, my new coord  is " + node);
                     changeState(msg.getKey(), State.Aborted);
+                    Abort abort = new Abort(msg.getKey(), metadata.contactId );
                     for (int i = serverSocket.getMyId() + 1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
-                        peers.get(i % config.getNumberOfNodes()).send(new Abort(msg.getKey(), metadata.contactId ));
+                        peers.get(i % config.getNumberOfNodes()).send(abort);
                     }
+                    metadata.extraContacts.forEach((i) -> peers.get(i).send(abort));
                     aborted.push(new ImmutablePair<>(metadata.writeClient, new PutRequest(msg.getKey(), metadata.toWrite)));
                     metadata.coordinator = node;
                     metadata.contactId = contactRequest.getContactId();
-                    if(serverSocket.getMyId() < node + config.getWriteQuorum() - config.getNumberOfNodes()) {
-                        changeState(msg.getKey(), State.Ready);
-                        c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
-                    }
-                    else {
-                        changeState(msg.getKey(), State.Idle);
-                    }
+                    changeState(msg.getKey(), State.Ready);
+                    c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), contactRequest.getContactId()));
                     return true;
                 } else {
                     return false;
                 }
-            } else if (db.get(msg.getKey()).getMetadata().state == State.Ready) {
-                if (node > metadata.coordinator) {
-                    c.send(new Nack(msg.getKey(), metadata.coordinator, metadata.contactId));
+            } else if (metadata.state == State.Ready) {
+                Pair<Integer, Integer> p = new ImmutablePair<>(node, contactRequest.getContactId());
+                if (node > metadata.coordinator && !metadata.nacked.contains(p)) {
+                    metadata.nacked.add(p);
+                    c.send(new Nack(msg.getKey(), metadata.coordinator, contactRequest.getContactId()));
                 }
                 return false;
             } else if (db.get(msg.getKey()).getMetadata().state == State.Idle) {
                 metadata.coordinator = node;
                 changeState(msg.getKey(), State.Ready);
                 metadata.contactId = contactRequest.getContactId();
-                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), metadata.contactId));
+                c.send(new ContactResponse(msg.getKey(), db.get(msg.getKey()).getVersion(), contactRequest.getContactId()));
                 return true;
             }
             return false; // if state is Committed or Aborted don't consume the message
     }
 
-    boolean onContactResponse(Connection ignored, Message msg) {
+    boolean onContactResponse(Connection c, Message msg) {
         ContactResponse contactResponse = (ContactResponse) msg;
         Metadata metadata = db.get(msg.getKey()).getMetadata();
         if (contactResponse.getContactId() != metadata.contactId) {
@@ -207,8 +222,10 @@ public class Node {
             for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
                 peers.get(i % config.getNumberOfNodes()).send(write);
             }
+            metadata.extraContacts.forEach((i) -> peers.get(i).send(write));
             metadata.writeClient.send(putResponse);
             metadata.writeClient.stop();
+            clients.remove(metadata.writeClient);
             changeState(contactResponse.getKey(), State.Idle);
             operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         }
@@ -235,10 +252,16 @@ public class Node {
 
     boolean onNack(Connection ignored, Message msg) {
         Nack nack = (Nack) msg;
-        if (nack.getContactId() != db.get(msg.getKey()).getMetadata().contactId)
+        Metadata metadata = db.get(msg.getKey()).getMetadata();
+        if (nack.getContactId() != metadata.contactId)
             return true; // drop message
-        if (nack.getNodeID() >= serverSocket.myId + config.getWriteQuorum())
-            peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), nack.getContactId()));
+        if ( (nack.getNodeID() >=(serverSocket.myId + config.getWriteQuorum()) - config.getNumberOfNodes()) && nack.getNodeID() < serverSocket.myId) {
+            if (metadata.extraContacts.contains(nack.getNodeID())) // avoid repetitions
+                return true; // drop message
+            metadata.extraContacts.add(nack.getNodeID());
+            peers.get(nack.getNodeID()).send(new ContactRequest(msg.getKey(), metadata.contactId));
+            logger.log(Level.INFO, "New extraContacts: " + metadata.extraContacts);
+        }
         return true;
     }
 
@@ -257,6 +280,7 @@ public class Node {
         metadata.writeMaxVersion = db.get(msg.getKey()).getVersion();
         metadata.writeClient = c;
         metadata.contactId = contactCounter.getAndIncrement();
+        logger.log(Level.INFO, "sending contact request because of"+ msg);
         for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getWriteQuorum(); i++) {
             peers.get(i % config.getNumberOfNodes()).send(new ContactRequest(msg.getKey(), metadata.contactId));
         }
@@ -283,6 +307,9 @@ public class Node {
         if (metadata.readCounter == config.getReadQuorum()-1) {
             metadata.readClient.send(new GetResponse(msg.getKey(), metadata.latestValue, metadata.readMaxVersion));
             metadata.readClient.stop();
+            for(int i = serverSocket.getMyId()+1; i < serverSocket.getMyId() + config.getReadQuorum(); i++) {
+                peers.get(i%config.getNumberOfNodes()).send(new Write(msg.getKey(), metadata.latestValue, metadata.readMaxVersion, -1));
+            }
             metadata.readMaxVersion = -1;
             metadata.latestValue = null;
             metadata.readClient = null;
@@ -295,11 +322,17 @@ public class Node {
     boolean onWrite(Connection c, Message msg) {
         Write write = (Write) msg;
         Metadata metadata = db.get(write.getKey()).getMetadata();
-        if (write.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
-            return false;
+        if (write.getContactId() == -1) {
+            if (db.get(write.getKey()).getVersion() >= write.getVersion())
+                return true; // drop message
+        }
+        else {
+            if (write.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
+                return false;
+            changeState(write.getKey(), State.Idle);
+        }
         db.get(write.getKey()).setValue(write.getValue());
         db.get(write.getKey()).setVersion(write.getVersion());
-        changeState(write.getKey(), State.Idle);
         operationLogger.log_put(write.getKey(), write.getValue(), write.getVersion());
         return true;
     }
