@@ -103,10 +103,6 @@ public class Node {
             c.clearBindings(Topic.fromString(key));
         }
         logger.log(Level.INFO, "CHANGING STATE(" + key + ") from " +  db.get(key).getMetadata().state +  " to " + newState);
-        for (Connection c : peers.values()) {
-            logger.log(Level.INFO, c.getId() +" inbox:" + c.printQueue());
-        }
-        logger.log(Level.INFO, "Aborted stack: " + aborted);
         Metadata metadata = db.get(key).getMetadata();
         metadata.state = newState;
         metadata.ackCounter = 0;
