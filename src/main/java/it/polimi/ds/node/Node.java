@@ -152,8 +152,6 @@ public class Node {
         Abort abort = (Abort) msg;
         Metadata metadata = db.get(abort.getKey()).getMetadata();
 
-        if (metadata.contactId == null) return false; // even though this should not happen
-
         if (abort.getContactId() != metadata.contactId || !Objects.equals(c.getId(), metadata.coordinator))
             return false;
         changeState(msg.getKey(), State.Idle);
